@@ -10,10 +10,23 @@ const RESOURCE_NAMES: Dictionary = {
 	"hope": "希望值"
 }
 
+var day_label: Label
+var resource_labels: Dictionary = {}
+var population_label: Label
+var healthy_label: Label
+var sick_label: Label
+var temperature_label: Label
+
 
 func _ready() -> void:
 	print("[ShelterView] ready")
+	GameState.ensure_started()
+	if not GameState.state_changed.is_connected(_refresh_hud):
+		GameState.state_changed.connect(_refresh_hud)
+	if not GameState.resources_changed.is_connected(_refresh_hud):
+		GameState.resources_changed.connect(_refresh_hud)
 	_build_ui()
+	_refresh_hud()
 
 
 func _build_ui() -> void:
@@ -35,15 +48,30 @@ func _build_ui() -> void:
 
 
 func _make_hud() -> HBoxContainer:
-	var resources: Dictionary = _load_initial_resources()
 	var hud: HBoxContainer = HBoxContainer.new()
 	hud.add_theme_constant_override("separation", 14)
-	hud.add_child(_make_hud_label("第 1 天"))
+	day_label = _make_hud_label("")
+	hud.add_child(day_label)
 
-	for resource_id: String in RESOURCE_ORDER:
-		var resource_name: String = str(RESOURCE_NAMES.get(resource_id, resource_id))
-		var amount: int = int(resources.get(resource_id, 0))
-		hud.add_child(_make_hud_label("%s：%d" % [resource_name, amount]))
+	var resource_order: Array[String] = GameState.get_resource_order()
+	if resource_order.is_empty():
+		resource_order = RESOURCE_ORDER
+	for resource_id: String in resource_order:
+		var label: Label = _make_hud_label("")
+		resource_labels[resource_id] = label
+		hud.add_child(label)
+
+	population_label = _make_hud_label("")
+	hud.add_child(population_label)
+
+	healthy_label = _make_hud_label("")
+	hud.add_child(healthy_label)
+
+	sick_label = _make_hud_label("")
+	hud.add_child(sick_label)
+
+	temperature_label = _make_hud_label("")
+	hud.add_child(temperature_label)
 
 	return hud
 
@@ -116,30 +144,27 @@ func _make_action_bar() -> HBoxContainer:
 	return actions
 
 
-func _load_initial_resources() -> Dictionary:
-	var result: Dictionary = {}
-	var file: FileAccess = FileAccess.open("res://data/resources.json", FileAccess.READ)
-	if file == null:
-		push_warning("[ShelterView] resources.json not found, using zero resources")
-		return result
+func _refresh_hud() -> void:
+	if day_label != null:
+		day_label.text = "第 %d 天" % GameState.day
 
-	var parsed: Variant = JSON.parse_string(file.get_as_text())
-	if typeof(parsed) != TYPE_DICTIONARY:
-		push_warning("[ShelterView] resources.json parse failed, using zero resources")
-		return result
-
-	var data: Dictionary = parsed as Dictionary
-	var items: Array = data.get("items", []) as Array
-	for item_value: Variant in items:
-		if typeof(item_value) != TYPE_DICTIONARY:
+	for resource_id_value: Variant in resource_labels.keys():
+		var resource_id: String = str(resource_id_value)
+		var label: Label = resource_labels.get(resource_id) as Label
+		if label == null:
 			continue
-		var item: Dictionary = item_value as Dictionary
-		var resource_id: String = str(item.get("id", ""))
-		if resource_id.is_empty():
-			continue
-		result[resource_id] = int(item.get("initial_amount", 0))
+		var resource_name: String = GameState.get_resource_name(resource_id)
+		var amount: int = GameState.get_resource_amount(resource_id)
+		label.text = "%s：%d" % [resource_name, amount]
 
-	return result
+	if population_label != null:
+		population_label.text = "人口：%d" % GameState.get_alive_population()
+	if healthy_label != null:
+		healthy_label.text = "健康：%d" % GameState.get_healthy_population()
+	if sick_label != null:
+		sick_label.text = "病患：%d" % GameState.get_sick_population()
+	if temperature_label != null:
+		temperature_label.text = "温度评分：%d" % GameState.temperature_score
 
 
 func _on_world_map_pressed() -> void:

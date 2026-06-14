@@ -54,6 +54,7 @@ func _make_menu_button(text: String) -> Button:
 
 func _on_start_new_game_pressed() -> void:
 	print("[MainMenu] button=start_new_game")
+	GameState.start_new_game()
 	SceneRouter.go_to_shelter()
 
 
