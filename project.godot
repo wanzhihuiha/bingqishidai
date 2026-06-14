@@ -11,8 +11,13 @@ config_version=5
 [application]
 
 config/name="bingqishidai"
+run/main_scene="res://scenes/menu/MainMenu.tscn"
 config/features=PackedStringArray("4.6", "Forward Plus")
 config/icon="res://icon.svg"
+
+[autoload]
+
+SceneRouter="*res://scripts/managers/SceneRouter.gd"
 
 [physics]
 
