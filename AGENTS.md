@@ -5,7 +5,7 @@
 
 ## 1. 环境
 - Windows | Godot 4.x
-- 本机 Godot 4.6.2 命令行测试使用：`D:\APP\godot\Godot_v4.6.2-stable_win64.exe\Godot_v4.6.2-stable_win64_console.exe`。注意外层 `Godot_v4.6.2-stable_win64.exe` 是目录，不是真正的 exe。
+- 本机 Godot 4.6.2 命令行测试使用：`D:\DATA\ChromeDownload\Godot_v4.6.2-stable_win64.exe\Godot_v4.6.2-stable_win64_console.exe`。注意外层 `Godot_v4.6.2-stable_win64.exe` 是目录，不是真正的 exe。
 - 使用中文回答 | UTF-8
 - AI 工具： Codex
 
@@ -14,6 +14,7 @@
 - 优先让当前项目保持可运行，再继续加功能。
 - 改完代码后，要明确告诉学员需要在 Godot 里怎么验证。
 - 操作 `.tscn` 文件时要小心格式。如果 .tscn 反复出错，改用 GDScript 代码动态创建节点。
+- 在 Codex 沙箱内直接运行 Godot 可能因无法写入 `user://logs` 触发 Godot 引擎崩溃；遇到这种情况，先使用提权运行验证，不要直接判断为项目脚本错误。
 
 ## 3. 项目边界
 - 默认一直围绕当前这个项目文件夹工作，不引导学员切换到别的工作区。
