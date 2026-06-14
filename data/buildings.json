@@ -5,7 +5,7 @@
       "id": "furnace",
       "name": "寒炉",
       "unlock_day": 1,
-      "max_level": 3,
+      "max_level": 5,
       "job_id": "engineer",
       "levels": [
         {
@@ -13,7 +13,9 @@
           "cost": {},
           "production": {
             "coal_cost_per_night": 6,
-            "heat_level": 1
+            "heat_level": 1,
+            "warmth_bonus": 20,
+            "population_cap_bonus": 0
           },
           "unlocks": [
             "basic_survival"
@@ -25,11 +27,13 @@
           "level": 2,
           "cost": {
             "wood": 20,
-            "parts": 5
+            "coal": 10
           },
           "production": {
             "coal_cost_per_night": 5,
-            "heat_level": 2
+            "heat_level": 2,
+            "warmth_bonus": 40,
+            "population_cap_bonus": 5
           },
           "unlocks": [],
           "effects": [
@@ -45,12 +49,15 @@
         {
           "level": 3,
           "cost": {
-            "wood": 35,
-            "parts": 12
+            "wood": 20,
+            "coal": 15,
+            "parts": 5
           },
           "production": {
             "coal_cost_per_night": 4,
-            "heat_level": 3
+            "heat_level": 3,
+            "warmth_bonus": 60,
+            "population_cap_bonus": 10
           },
           "unlocks": [
             "storm_resistance"
@@ -64,6 +71,56 @@
             }
           ],
           "display_text": "显著降低暴风雪期间的低温风险。"
+        },
+        {
+          "level": 4,
+          "cost": {
+            "wood": 50,
+            "coal": 25,
+            "parts": 12
+          },
+          "production": {
+            "coal_cost_per_night": 3,
+            "heat_level": 4,
+            "warmth_bonus": 80,
+            "population_cap_bonus": 15
+          },
+          "unlocks": [],
+          "effects": [
+            {
+              "effect_type": "injury_risk_modifier",
+              "target_id": "storm_cold",
+              "value": -0.2,
+              "note": "强化炉体提高暴风雪抗性。"
+            }
+          ],
+          "display_text": "强化供暖效率，提高人口承载能力。"
+        },
+        {
+          "level": 5,
+          "cost": {
+            "wood": 70,
+            "coal": 40,
+            "parts": 20
+          },
+          "production": {
+            "coal_cost_per_night": 2,
+            "heat_level": 5,
+            "warmth_bonus": 100,
+            "population_cap_bonus": 20
+          },
+          "unlocks": [
+            "deep_winter_resistance"
+          ],
+          "effects": [
+            {
+              "effect_type": "injury_risk_modifier",
+              "target_id": "cold",
+              "value": -0.3,
+              "note": "最高等级寒炉显著降低严寒伤病风险。"
+            }
+          ],
+          "display_text": "寒炉达到最高等级，提供最稳定的营地供暖。"
         }
       ],
       "description": "营地供暖核心，煤炭不足时会熄灭。"

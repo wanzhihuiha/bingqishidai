@@ -2,9 +2,10 @@ extends Node
 
 signal state_changed
 signal resources_changed
+signal temperature_changed
 
-const DEFAULT_TEMPERATURE_SCORE: int = 60
 const DEFAULT_FURNACE_LEVEL: int = 1
+const DEFAULT_WEATHER_PRESSURE: float = 0.0
 
 var day: int = 1
 var phase: String = "day"
@@ -16,7 +17,8 @@ var population: Dictionary = {
 	"dead": 0
 }
 var furnace_level: int = DEFAULT_FURNACE_LEVEL
-var temperature_score: int = DEFAULT_TEMPERATURE_SCORE
+var temperature_score: int = 0
+var weather_pressure: float = DEFAULT_WEATHER_PRESSURE
 var is_started: bool = false
 
 
@@ -26,7 +28,8 @@ func start_new_game() -> void:
 	resources = _build_initial_resources()
 	population = _build_initial_population()
 	furnace_level = DEFAULT_FURNACE_LEVEL
-	temperature_score = DEFAULT_TEMPERATURE_SCORE
+	weather_pressure = DEFAULT_WEATHER_PRESSURE
+	refresh_temperature_score("start_new_game")
 	is_started = true
 	print("[GameState] start_new_game day=%d phase=%s resources=%s population=%s furnace_level=%d temperature_score=%d" % [
 		day,
@@ -81,6 +84,8 @@ func set_resource(resource_id: String, amount: int, source: String) -> void:
 	var after: int = _clamp_resource(resource_id, amount)
 	resources[resource_id] = after
 	print("[GameState] set_resource source=%s resource=%s before=%d after=%d" % [source, resource_id, before, after])
+	if resource_id == "coal":
+		refresh_temperature_score("resource_set:%s" % resource_id)
 	resources_changed.emit()
 	state_changed.emit()
 
@@ -90,8 +95,46 @@ func add_resource(resource_id: String, amount: int, source: String) -> void:
 	var after: int = _clamp_resource(resource_id, before + amount)
 	resources[resource_id] = after
 	print("[GameState] add_resource source=%s resource=%s amount=%d before=%d after=%d" % [source, resource_id, amount, before, after])
+	if resource_id == "coal":
+		refresh_temperature_score("resource_changed:%s" % resource_id)
 	resources_changed.emit()
 	state_changed.emit()
+
+
+func set_furnace_level(level: int, source: String) -> void:
+	var before: int = furnace_level
+	var max_level: int = BuildingManager.get_furnace_max_level()
+	furnace_level = int(clamp(level, DEFAULT_FURNACE_LEVEL, max_level))
+	print("[GameState] set_furnace_level source=%s before=%d after=%d" % [source, before, furnace_level])
+	refresh_temperature_score("furnace_level_changed")
+	state_changed.emit()
+
+
+func refresh_temperature_score(source: String = "manual") -> void:
+	var before: int = temperature_score
+	var coal_amount: int = get_resource_amount("coal")
+	var calculated: float = float(furnace_level * 20) + float(min(coal_amount, 50)) * 0.2 - weather_pressure
+	temperature_score = int(round(calculated))
+	print("[GameState] refresh_temperature_score source=%s furnace_level=%d coal=%d weather_pressure=%.1f before=%d after=%d status=%s" % [
+		source,
+		furnace_level,
+		coal_amount,
+		weather_pressure,
+		before,
+		temperature_score,
+		get_temperature_status()
+	])
+	temperature_changed.emit()
+
+
+func get_temperature_status() -> String:
+	if temperature_score >= 80:
+		return "温暖"
+	if temperature_score >= 50:
+		return "可忍受"
+	if temperature_score >= 20:
+		return "寒冷"
+	return "危险"
 
 
 func get_alive_population() -> int:

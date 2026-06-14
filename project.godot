@@ -18,6 +18,7 @@ config/icon="res://icon.svg"
 [autoload]
 
 DataLoader="*res://scripts/managers/DataLoader.gd"
+BuildingManager="*res://scripts/managers/BuildingManager.gd"
 GameState="*res://scripts/managers/GameState.gd"
 SceneRouter="*res://scripts/managers/SceneRouter.gd"
 

@@ -37,6 +37,11 @@ var population_label: Label
 var healthy_label: Label
 var sick_label: Label
 var temperature_label: Label
+var furnace_level_label: Label
+var furnace_temperature_label: Label
+var furnace_cost_label: Label
+var furnace_message_label: Label
+var furnace_upgrade_button: Button
 var collect_cards: Dictionary = {}
 
 
@@ -48,6 +53,8 @@ func _ready() -> void:
 		GameState.state_changed.connect(_refresh_hud)
 	if not GameState.resources_changed.is_connected(_refresh_hud):
 		GameState.resources_changed.connect(_refresh_hud)
+	if not GameState.temperature_changed.is_connected(_refresh_hud):
+		GameState.temperature_changed.connect(_refresh_hud)
 	_build_ui()
 	_refresh_hud()
 
@@ -120,16 +127,16 @@ func _make_center_panel() -> PanelContainer:
 	grid.add_theme_constant_override("v_separation", 16)
 	panel.add_child(grid)
 
-	grid.add_child(_make_placeholder("寒炉", "营地核心占位"))
+	grid.add_child(_make_furnace_card())
 	for config_value: Dictionary in COLLECT_BUILDINGS:
 		grid.add_child(_make_collect_card(config_value))
 
 	return panel
 
 
-func _make_placeholder(title_text: String, body_text: String) -> PanelContainer:
+func _make_furnace_card() -> PanelContainer:
 	var panel: PanelContainer = PanelContainer.new()
-	panel.custom_minimum_size = Vector2(220, 140)
+	panel.custom_minimum_size = Vector2(280, 230)
 
 	var box: VBoxContainer = VBoxContainer.new()
 	box.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -137,15 +144,35 @@ func _make_placeholder(title_text: String, body_text: String) -> PanelContainer:
 	panel.add_child(box)
 
 	var title: Label = Label.new()
-	title.text = title_text
+	title.text = "寒炉"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 24)
 	box.add_child(title)
 
-	var body: Label = Label.new()
-	body.text = body_text
-	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(body)
+	furnace_level_label = Label.new()
+	furnace_level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(furnace_level_label)
+
+	furnace_temperature_label = Label.new()
+	furnace_temperature_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(furnace_temperature_label)
+
+	furnace_cost_label = Label.new()
+	furnace_cost_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	furnace_cost_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(furnace_cost_label)
+
+	furnace_message_label = Label.new()
+	furnace_message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	furnace_message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	furnace_message_label.add_theme_font_size_override("font_size", 16)
+	box.add_child(furnace_message_label)
+
+	furnace_upgrade_button = Button.new()
+	furnace_upgrade_button.text = "升级寒炉"
+	furnace_upgrade_button.custom_minimum_size = Vector2(130, 36)
+	furnace_upgrade_button.pressed.connect(_on_furnace_upgrade_pressed)
+	box.add_child(furnace_upgrade_button)
 
 	return panel
 
@@ -226,6 +253,31 @@ func _refresh_collect_card(resource_id: String) -> void:
 		status.text = "可收取"
 
 
+func _refresh_furnace_card() -> void:
+	if furnace_level_label == null:
+		return
+
+	var max_level: int = BuildingManager.get_furnace_max_level()
+	var current_level: int = GameState.furnace_level
+	furnace_level_label.text = "等级：%d / %d" % [current_level, max_level]
+
+	if furnace_temperature_label != null:
+		furnace_temperature_label.text = "温度评分：%d（%s）" % [
+			GameState.temperature_score,
+			GameState.get_temperature_status()
+		]
+
+	if furnace_cost_label != null:
+		furnace_cost_label.text = "升级所需：%s" % BuildingManager.get_furnace_upgrade_cost_text()
+
+	if furnace_upgrade_button != null:
+		furnace_upgrade_button.disabled = current_level >= max_level
+		if current_level >= max_level:
+			furnace_upgrade_button.text = "已满级"
+		else:
+			furnace_upgrade_button.text = "升级寒炉"
+
+
 func _on_collect_pressed(resource_id: String, amount: int) -> void:
 	var card: Dictionary = collect_cards.get(resource_id, {}) as Dictionary
 	var cooldown_left: float = float(card.get("cooldown_left", 0.0))
@@ -261,6 +313,33 @@ func _play_collect_feedback(resource_id: String, amount: int) -> void:
 	tween.tween_property(button, "modulate", Color(1.0, 0.9, 0.45, 1.0), 0.1)
 	tween.chain().tween_property(button, "modulate", Color.WHITE, 0.2)
 	tween.chain().tween_callback(feedback_label.queue_free)
+
+
+func _on_furnace_upgrade_pressed() -> void:
+	var result: Dictionary = BuildingManager.upgrade_furnace()
+	var message: String = str(result.get("message", ""))
+	var success: bool = bool(result.get("success", false))
+	if furnace_message_label != null:
+		furnace_message_label.text = message
+		if success:
+			furnace_message_label.add_theme_color_override("font_color", Color(0.25, 0.75, 0.35, 1.0))
+		else:
+			furnace_message_label.add_theme_color_override("font_color", Color(1.0, 0.25, 0.18, 1.0))
+	_play_furnace_upgrade_feedback(success)
+	_refresh_hud()
+
+
+func _play_furnace_upgrade_feedback(success: bool) -> void:
+	if furnace_upgrade_button == null:
+		return
+
+	var target_color: Color = Color(0.45, 1.0, 0.65, 1.0)
+	if not success:
+		target_color = Color(1.0, 0.55, 0.45, 1.0)
+
+	var tween: Tween = create_tween()
+	tween.tween_property(furnace_upgrade_button, "modulate", target_color, 0.1)
+	tween.tween_property(furnace_upgrade_button, "modulate", Color.WHITE, 0.2)
 
 
 func _make_action_bar() -> HBoxContainer:
@@ -303,7 +382,12 @@ func _refresh_hud() -> void:
 	if sick_label != null:
 		sick_label.text = "病患：%d" % GameState.get_sick_population()
 	if temperature_label != null:
-		temperature_label.text = "温度评分：%d" % GameState.temperature_score
+		temperature_label.text = "温度评分：%d（%s）" % [
+			GameState.temperature_score,
+			GameState.get_temperature_status()
+		]
+
+	_refresh_furnace_card()
 
 
 func _on_world_map_pressed() -> void:
