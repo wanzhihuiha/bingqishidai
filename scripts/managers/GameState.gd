@@ -56,6 +56,22 @@ func get_resource_name(resource_id: String) -> String:
 	return str(config.get("name", resource_id))
 
 
+func get_resource_max_amount(resource_id: String) -> int:
+	var config: Dictionary = DataLoader.get_resource_config(resource_id)
+	var max_value: Variant = config.get("max_amount", null)
+	if max_value == null:
+		return -1
+	return int(max_value)
+
+
+func is_resource_near_max(resource_id: String) -> bool:
+	var max_amount: int = get_resource_max_amount(resource_id)
+	if max_amount < 0:
+		return false
+	var current_amount: int = get_resource_amount(resource_id)
+	return current_amount >= int(float(max_amount) * 0.8)
+
+
 func get_resource_order() -> Array[String]:
 	return DataLoader.get_resource_order()
 

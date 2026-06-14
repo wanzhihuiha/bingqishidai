@@ -9,6 +9,27 @@ const RESOURCE_NAMES: Dictionary = {
 	"parts": "零件",
 	"hope": "希望值"
 }
+const COLLECT_COOLDOWN_SECONDS: float = 10.0
+const COLLECT_BUILDINGS: Array[Dictionary] = [
+	{
+		"title": "伐木棚",
+		"body": "点击收取木材",
+		"resource_id": "wood",
+		"amount": 5
+	},
+	{
+		"title": "猎屋",
+		"body": "点击收取食物",
+		"resource_id": "food",
+		"amount": 5
+	},
+	{
+		"title": "煤堆",
+		"body": "点击收取煤炭",
+		"resource_id": "coal",
+		"amount": 5
+	}
+]
 
 var day_label: Label
 var resource_labels: Dictionary = {}
@@ -16,10 +37,12 @@ var population_label: Label
 var healthy_label: Label
 var sick_label: Label
 var temperature_label: Label
+var collect_cards: Dictionary = {}
 
 
 func _ready() -> void:
 	print("[ShelterView] ready")
+	set_process(true)
 	GameState.ensure_started()
 	if not GameState.state_changed.is_connected(_refresh_hud):
 		GameState.state_changed.connect(_refresh_hud)
@@ -27,6 +50,10 @@ func _ready() -> void:
 		GameState.resources_changed.connect(_refresh_hud)
 	_build_ui()
 	_refresh_hud()
+
+
+func _process(delta: float) -> void:
+	_update_collect_cooldowns(delta)
 
 
 func _build_ui() -> void:
@@ -94,9 +121,8 @@ func _make_center_panel() -> PanelContainer:
 	panel.add_child(grid)
 
 	grid.add_child(_make_placeholder("寒炉", "营地核心占位"))
-	grid.add_child(_make_placeholder("建筑位 1", "基础生产建筑占位"))
-	grid.add_child(_make_placeholder("建筑位 2", "生存保障建筑占位"))
-	grid.add_child(_make_placeholder("建筑位 3", "进阶功能建筑占位"))
+	for config_value: Dictionary in COLLECT_BUILDINGS:
+		grid.add_child(_make_collect_card(config_value))
 
 	return panel
 
@@ -122,6 +148,119 @@ func _make_placeholder(title_text: String, body_text: String) -> PanelContainer:
 	box.add_child(body)
 
 	return panel
+
+
+func _make_collect_card(config: Dictionary) -> PanelContainer:
+	var panel: PanelContainer = PanelContainer.new()
+	panel.custom_minimum_size = Vector2(220, 140)
+
+	var box: VBoxContainer = VBoxContainer.new()
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", 8)
+	panel.add_child(box)
+
+	var title: Label = Label.new()
+	title.text = str(config.get("title", "资源点"))
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 24)
+	box.add_child(title)
+
+	var body: Label = Label.new()
+	body.text = str(config.get("body", "点击收取资源"))
+	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(body)
+
+	var status: Label = Label.new()
+	status.text = "可收取"
+	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(status)
+
+	var button: Button = Button.new()
+	button.text = "收取"
+	button.custom_minimum_size = Vector2(130, 36)
+	box.add_child(button)
+
+	var resource_id: String = str(config.get("resource_id", ""))
+	var amount: int = int(config.get("amount", 0))
+	button.pressed.connect(_on_collect_pressed.bind(resource_id, amount))
+	collect_cards[resource_id] = {
+		"button": button,
+		"status": status,
+		"cooldown_left": 0.0
+	}
+
+	return panel
+
+
+func _update_collect_cooldowns(delta: float) -> void:
+	for resource_id_value: Variant in collect_cards.keys():
+		var resource_id: String = str(resource_id_value)
+		var card: Dictionary = collect_cards.get(resource_id, {}) as Dictionary
+		var cooldown_left: float = float(card.get("cooldown_left", 0.0))
+		if cooldown_left <= 0.0:
+			continue
+
+		cooldown_left = max(0.0, cooldown_left - delta)
+		card["cooldown_left"] = cooldown_left
+		collect_cards[resource_id] = card
+		_refresh_collect_card(resource_id)
+
+
+func _refresh_collect_card(resource_id: String) -> void:
+	var card: Dictionary = collect_cards.get(resource_id, {}) as Dictionary
+	var button: Button = card.get("button") as Button
+	var status: Label = card.get("status") as Label
+	var cooldown_left: float = float(card.get("cooldown_left", 0.0))
+	if button == null or status == null:
+		return
+
+	if cooldown_left > 0.0:
+		button.disabled = true
+		status.text = "冷却中：%.1f 秒" % cooldown_left
+		return
+
+	button.disabled = false
+	if GameState.is_resource_near_max(resource_id):
+		status.text = "仓库快满了"
+	else:
+		status.text = "可收取"
+
+
+func _on_collect_pressed(resource_id: String, amount: int) -> void:
+	var card: Dictionary = collect_cards.get(resource_id, {}) as Dictionary
+	var cooldown_left: float = float(card.get("cooldown_left", 0.0))
+	if cooldown_left > 0.0:
+		return
+
+	var before: int = GameState.get_resource_amount(resource_id)
+	GameState.add_resource(resource_id, amount, "collect_resource")
+	var after: int = GameState.get_resource_amount(resource_id)
+	print("collect_resource resource_id=%s amount=%d before=%d after=%d" % [resource_id, amount, before, after])
+	card["cooldown_left"] = COLLECT_COOLDOWN_SECONDS
+	collect_cards[resource_id] = card
+	_refresh_collect_card(resource_id)
+	_play_collect_feedback(resource_id, amount)
+
+
+func _play_collect_feedback(resource_id: String, amount: int) -> void:
+	var card: Dictionary = collect_cards.get(resource_id, {}) as Dictionary
+	var button: Button = card.get("button") as Button
+	if button == null:
+		return
+
+	var resource_name: String = GameState.get_resource_name(resource_id)
+	var feedback_label: Label = Label.new()
+	feedback_label.text = "+%d %s" % [amount, resource_name]
+	feedback_label.add_theme_font_size_override("font_size", 18)
+	button.get_parent().add_child(feedback_label)
+
+	var tween: Tween = create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(feedback_label, "position:y", feedback_label.position.y - 24.0, 0.6)
+	tween.tween_property(feedback_label, "modulate:a", 0.0, 0.6)
+	tween.tween_property(button, "modulate", Color(1.0, 0.9, 0.45, 1.0), 0.1)
+	tween.chain().tween_property(button, "modulate", Color.WHITE, 0.2)
+	tween.chain().tween_callback(feedback_label.queue_free)
 
 
 func _make_action_bar() -> HBoxContainer:
