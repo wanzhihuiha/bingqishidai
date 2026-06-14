@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "items": [
+    {
+      "id": "worker",
+      "name": "工人",
+      "related_building_id": "lumber_yard",
+      "base_output": {
+        "wood": 3
+      },
+      "risk_tags": [
+        "cold_injury"
+      ],
+      "description": "负责伐木、维修和基础建设。"
+    },
+    {
+      "id": "hunter",
+      "name": "猎手",
+      "related_building_id": "hunter_lodge",
+      "base_output": {
+        "food": 3
+      },
+      "risk_tags": [
+        "expedition_injury",
+        "storm_injury"
+      ],
+      "description": "负责狩猎和野外采集。"
+    },
+    {
+      "id": "cook",
+      "name": "厨师",
+      "related_building_id": "kitchen",
+      "base_output": {
+        "food_save_rate": 0.05
+      },
+      "risk_tags": [
+        "food_waste"
+      ],
+      "description": "提高食物利用率，降低浪费。"
+    },
+    {
+      "id": "medic",
+      "name": "医护",
+      "related_building_id": "medical_tent",
+      "base_output": {
+        "heal_points": 1
+      },
+      "risk_tags": [
+        "medicine_shortage"
+      ],
+      "description": "治疗轻伤和重伤幸存者。"
+    },
+    {
+      "id": "engineer",
+      "name": "工程师",
+      "related_building_id": "workshop",
+      "base_output": {
+        "parts": 1
+      },
+      "risk_tags": [
+        "repair_delay"
+      ],
+      "description": "负责零件制作、寒炉维护和信标修复。"
+    }
+  ]
+}

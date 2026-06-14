@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "items": [
+    {
+      "id": "guide_assign_workers",
+      "type": "guide",
+      "title": "分配第一批岗位",
+      "description": "为营地分配至少 3 名幸存者到岗位。",
+      "unlock_day": 1,
+      "conditions": {},
+      "target": {
+        "type": "job_assignment_total",
+        "value": 3
+      },
+      "rewards": [
+        {
+          "effect_type": "resource_delta",
+          "target_id": "hope",
+          "value": 2,
+          "note": "营地开始有序运转。"
+        }
+      ],
+      "next_quest_ids": [
+        "guide_upgrade_furnace"
+      ]
+    },
+    {
+      "id": "guide_upgrade_furnace",
+      "type": "guide",
+      "title": "升级寒炉",
+      "description": "将寒炉提升到 2 级，降低夜晚低温风险。",
+      "unlock_day": 2,
+      "conditions": {},
+      "target": {
+        "type": "building_level",
+        "building_id": "furnace",
+        "level": 2
+      },
+      "rewards": [],
+      "next_quest_ids": [
+        "main_repair_border_beacon"
+      ]
+    },
+    {
+      "id": "main_survive_30_days",
+      "type": "main",
+      "title": "守住 30 天",
+      "description": "在 30 天战役中保持营地未失败。",
+      "unlock_day": 1,
+      "conditions": {},
+      "target": {
+        "type": "survive_until_day",
+        "day": 30
+      },
+      "rewards": [],
+      "next_quest_ids": []
+    },
+    {
+      "id": "main_repair_border_beacon",
+      "type": "main",
+      "title": "修复边境信标",
+      "description": "接触 C4 区域并完成信标修复进度。",
+      "unlock_day": 17,
+      "conditions": {
+        "required_region_id": "c4_border_beacon"
+      },
+      "target": {
+        "type": "beacon_repair_progress",
+        "value": 2
+      },
+      "rewards": [
+        {
+          "effect_type": "resource_delta",
+          "target_id": "hope",
+          "value": 10,
+          "note": "信标修复带来希望。"
+        }
+      ],
+      "next_quest_ids": [
+        "main_send_beacon"
+      ]
+    },
+    {
+      "id": "main_send_beacon",
+      "type": "main",
+      "title": "发送边境信标",
+      "description": "在终局阶段成功发送信标。",
+      "unlock_day": 28,
+      "conditions": {},
+      "target": {
+        "type": "beacon_signal_sent",
+        "value": true
+      },
+      "rewards": [],
+      "next_quest_ids": []
+    }
+  ]
+}

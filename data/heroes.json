@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "items": [
+    {
+      "id": "lin_che",
+      "name": "林澈",
+      "role": "开拓者",
+      "join_day": 8,
+      "base_power": 6,
+      "specialty_tags": [
+        "scout",
+        "explore"
+      ],
+      "event_bonus": [
+        {
+          "effect_type": "success_rate_modifier",
+          "target_id": "scout",
+          "value": 0.15,
+          "note": "提高侦察成功率。"
+        }
+      ],
+      "description": "熟悉冰原路径，适合侦察和开路。"
+    },
+    {
+      "id": "xu_yan",
+      "name": "许砚",
+      "role": "工程师",
+      "join_day": 10,
+      "base_power": 5,
+      "specialty_tags": [
+        "repair",
+        "outpost"
+      ],
+      "event_bonus": [
+        {
+          "effect_type": "resource_delta",
+          "target_id": "parts",
+          "value": 1,
+          "note": "修复行动更节省零件。"
+        }
+      ],
+      "description": "擅长维修设备、建设前哨和推进信标目标。"
+    },
+    {
+      "id": "a_lan",
+      "name": "阿岚",
+      "role": "护卫",
+      "join_day": 12,
+      "base_power": 8,
+      "specialty_tags": [
+        "guard",
+        "intercept"
+      ],
+      "event_bonus": [
+        {
+          "effect_type": "battle_power_modifier",
+          "target_id": "guard_team",
+          "value": 2,
+          "note": "提升护卫行动战力。"
+        }
+      ],
+      "description": "适合清剿、护送和拦截敌方推进。"
+    },
+    {
+      "id": "shen_zhixue",
+      "name": "沈知雪",
+      "role": "医疗员",
+      "join_day": 14,
+      "base_power": 5,
+      "specialty_tags": [
+        "medical",
+        "rescue"
+      ],
+      "event_bonus": [
+        {
+          "effect_type": "injury_risk_modifier",
+          "target_id": "expedition",
+          "value": -0.1,
+          "note": "降低探险受伤风险。"
+        }
+      ],
+      "description": "适合搜救、危机恢复和长线行动。"
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "items": [
+    {
+      "id": "wood",
+      "name": "木材",
+      "category": "basic",
+      "initial_amount": 40,
+      "min_amount": 0,
+      "max_amount": null,
+      "display_order": 1,
+      "description": "用于建筑升级、维修和前哨建设的基础材料。"
+    },
+    {
+      "id": "food",
+      "name": "食物",
+      "category": "survival",
+      "initial_amount": 35,
+      "min_amount": 0,
+      "max_amount": null,
+      "display_order": 2,
+      "description": "用于夜晚消耗、小队补给和部分事件选择。"
+    },
+    {
+      "id": "coal",
+      "name": "煤炭",
+      "category": "survival",
+      "initial_amount": 30,
+      "min_amount": 0,
+      "max_amount": null,
+      "display_order": 3,
+      "description": "维持寒炉运转的核心生存资源。"
+    },
+    {
+      "id": "medicine",
+      "name": "药品",
+      "category": "recovery",
+      "initial_amount": 8,
+      "min_amount": 0,
+      "max_amount": null,
+      "display_order": 4,
+      "description": "用于治疗伤病和处理疾病事件。"
+    },
+    {
+      "id": "parts",
+      "name": "零件",
+      "category": "advanced",
+      "initial_amount": 0,
+      "min_amount": 0,
+      "max_amount": null,
+      "display_order": 5,
+      "description": "用于进阶建筑、前哨维护和信标修复。"
+    },
+    {
+      "id": "hope",
+      "name": "希望值",
+      "category": "morale",
+      "initial_amount": 60,
+      "min_amount": 0,
+      "max_amount": 100,
+      "display_order": 6,
+      "description": "营地士气。降至 0 时触发失败。"
+    }
+  ]
+}

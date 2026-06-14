@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "items": [
+    {
+      "id": "storm_warning_small",
+      "type": "storm",
+      "title": "小型暴风雪预警",
+      "body": "哨塔方向传来风声，明天可能出现小型暴风雪。",
+      "trigger": {
+        "min_day": 5,
+        "max_day": 6
+      },
+      "choices": [
+        {
+          "id": "store_coal",
+          "label": "提前储煤",
+          "effects": [
+            {
+              "effect_type": "resource_delta",
+              "target_id": "coal",
+              "value": -3,
+              "note": "提前分配煤炭到寒炉旁。"
+            }
+          ],
+          "result_text": "营地把煤炭集中到寒炉附近，准备迎接低温。"
+        },
+        {
+          "id": "keep_working",
+          "label": "维持生产",
+          "effects": [],
+          "result_text": "营地维持今日计划，但明天需要留意煤炭消耗。"
+        }
+      ],
+      "weight": 10,
+      "once_only": false,
+      "cooldown_days": 3,
+      "unique_key": "storm_warning"
+    },
+    {
+      "id": "refugees_at_gate",
+      "type": "refugee",
+      "title": "雪夜求助者",
+      "body": "几名幸存者抵达营地外，请求进入避难所。",
+      "trigger": {
+        "min_day": 3,
+        "max_day": 20,
+        "min_resources": {
+          "food": 8
+        }
+      },
+      "choices": [
+        {
+          "id": "offer_food",
+          "label": "提供食物",
+          "effects": [
+            {
+              "effect_type": "resource_delta",
+              "target_id": "food",
+              "value": -6,
+              "note": "接纳求助者消耗食物。"
+            },
+            {
+              "effect_type": "resource_delta",
+              "target_id": "hope",
+              "value": 5,
+              "note": "成功救助提升希望值。"
+            }
+          ],
+          "result_text": "求助者被安置下来，营地士气有所提升。"
+        },
+        {
+          "id": "turn_away",
+          "label": "暂不接纳",
+          "effects": [
+            {
+              "effect_type": "resource_delta",
+              "target_id": "hope",
+              "value": -3,
+              "note": "拒绝救助降低希望值。"
+            }
+          ],
+          "result_text": "守卫关闭了营门，营地气氛变得沉重。"
+        }
+      ],
+      "weight": 6,
+      "once_only": false,
+      "cooldown_days": 5,
+      "unique_key": "refugee_help"
+    }
+  ]
+}

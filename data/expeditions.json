@@ -1,0 +1,185 @@
+{
+  "schema_version": 1,
+  "items": [
+    {
+      "id": "scout_broken_pines",
+      "type": "scout",
+      "title": "侦察断松林",
+      "description": "派出小队确认断松林的资源和危险度。",
+      "conditions": {
+        "min_day": 8,
+        "required_region_id": "a1_broken_pines"
+      },
+      "target_region_id": "a1_broken_pines",
+      "required_tags": [
+        "scout"
+      ],
+      "food_cost": 4,
+      "base_difficulty": 1,
+      "rewards": [
+        {
+          "effect_type": "state_change",
+          "target_id": "region.is_scouted",
+          "value": true,
+          "note": "区域变为已侦察。"
+        }
+      ],
+      "log_tags": [
+        "forest",
+        "scout"
+      ]
+    },
+    {
+      "id": "gather_frozen_creek",
+      "type": "gather",
+      "title": "冻溪猎场采集",
+      "description": "在冻溪猎场寻找可用食物。",
+      "conditions": {
+        "min_day": 8,
+        "required_region_id": "a2_frozen_creek"
+      },
+      "target_region_id": "a2_frozen_creek",
+      "required_tags": [
+        "gather"
+      ],
+      "food_cost": 5,
+      "base_difficulty": 2,
+      "rewards": [
+        {
+          "effect_type": "resource_delta",
+          "target_id": "food",
+          "value": 12,
+          "note": "采集到冻溪附近的食物。"
+        }
+      ],
+      "log_tags": [
+        "creek",
+        "gather"
+      ]
+    },
+    {
+      "id": "rescue_old_clinic",
+      "type": "rescue",
+      "title": "旧诊所搜救",
+      "description": "搜索旧诊所，回收药品并寻找幸存者。",
+      "conditions": {
+        "min_day": 10,
+        "required_region_id": "b2_old_clinic"
+      },
+      "target_region_id": "b2_old_clinic",
+      "required_tags": [
+        "rescue",
+        "medical"
+      ],
+      "food_cost": 6,
+      "base_difficulty": 3,
+      "rewards": [
+        {
+          "effect_type": "resource_delta",
+          "target_id": "medicine",
+          "value": 4,
+          "note": "从旧诊所回收药品。"
+        },
+        {
+          "effect_type": "resource_delta",
+          "target_id": "hope",
+          "value": 3,
+          "note": "搜救成功提升希望值。"
+        }
+      ],
+      "log_tags": [
+        "clinic",
+        "rescue"
+      ]
+    },
+    {
+      "id": "clear_cracked_mine",
+      "type": "clear",
+      "title": "清剿裂冰矿井",
+      "description": "降低裂冰矿井的敌方压力，为后续采集铺路。",
+      "conditions": {
+        "min_day": 17,
+        "required_region_id": "b3_cracked_mine"
+      },
+      "target_region_id": "b3_cracked_mine",
+      "required_tags": [
+        "guard"
+      ],
+      "food_cost": 7,
+      "base_difficulty": 4,
+      "rewards": [
+        {
+          "effect_type": "state_change",
+          "target_id": "region_owner",
+          "value": "player",
+          "note": "清剿成功后区域转为玩家控制。"
+        }
+      ],
+      "log_tags": [
+        "mine",
+        "clear"
+      ]
+    },
+    {
+      "id": "escort_scrap_yard",
+      "type": "escort",
+      "title": "护送废车场回收队",
+      "description": "护送回收队从废车场带回零件。",
+      "conditions": {
+        "min_day": 12,
+        "required_region_id": "b1_scrap_yard"
+      },
+      "target_region_id": "b1_scrap_yard",
+      "required_tags": [
+        "escort",
+        "guard"
+      ],
+      "food_cost": 6,
+      "base_difficulty": 3,
+      "rewards": [
+        {
+          "effect_type": "resource_delta",
+          "target_id": "parts",
+          "value": 8,
+          "note": "护送成功带回零件。"
+        }
+      ],
+      "log_tags": [
+        "scrap",
+        "escort"
+      ]
+    },
+    {
+      "id": "repair_border_beacon",
+      "type": "repair",
+      "title": "修复边境信标",
+      "description": "派出工程人员修复 C4 区域的信标设备。",
+      "conditions": {
+        "min_day": 20,
+        "required_region_id": "c4_border_beacon",
+        "min_resources": {
+          "parts": 10,
+          "coal": 10
+        }
+      },
+      "target_region_id": "c4_border_beacon",
+      "required_tags": [
+        "repair"
+      ],
+      "food_cost": 8,
+      "base_difficulty": 5,
+      "rewards": [
+        {
+          "effect_type": "beacon_delta",
+          "target_id": "repair_progress",
+          "value": 1,
+          "note": "推进信标修复进度。"
+        }
+      ],
+      "log_tags": [
+        "beacon",
+        "repair"
+      ]
+    }
+  ]
+}

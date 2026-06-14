@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "random_delta_min": -2,
+  "random_delta_max": 2,
+  "description": "小队战力 = 英雄基础战力 + 小队类型加成 + 装备加成 + 训练场加成；任务难度 = 区域危险度 + 敌方强度 + 天气修正；结算差值 = 小队战力 - 任务难度 + 随机波动。",
+  "outcomes": [
+    {
+      "id": "great_success",
+      "name": "大成功",
+      "min_margin": 5,
+      "max_margin": null,
+      "reward_multiplier": 1.5,
+      "injury_chance": 0.0,
+      "hope_delta": 3,
+      "log_tone": "heroic"
+    },
+    {
+      "id": "success",
+      "name": "成功",
+      "min_margin": 1,
+      "max_margin": 4,
+      "reward_multiplier": 1.0,
+      "injury_chance": 0.1,
+      "hope_delta": 0,
+      "log_tone": "steady"
+    },
+    {
+      "id": "narrow_success",
+      "name": "险胜",
+      "min_margin": -1,
+      "max_margin": 0,
+      "reward_multiplier": 0.6,
+      "injury_chance": 0.25,
+      "hope_delta": 0,
+      "log_tone": "tense"
+    },
+    {
+      "id": "failure",
+      "name": "失败",
+      "min_margin": null,
+      "max_margin": -2,
+      "reward_multiplier": 0.0,
+      "injury_chance": 0.45,
+      "hope_delta": -3,
+      "log_tone": "danger"
+    },
+    {
+      "id": "retreat",
+      "name": "撤退",
+      "min_margin": null,
+      "max_margin": null,
+      "reward_multiplier": 0.0,
+      "injury_chance": 0.15,
+      "hope_delta": -1,
+      "log_tone": "retreat"
+    }
+  ]
+}

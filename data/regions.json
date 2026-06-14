@@ -1,0 +1,292 @@
+{
+  "schema_version": 1,
+  "items": [
+    {
+      "id": "a0_camp",
+      "code": "A0",
+      "name": "寒炉营地",
+      "ring": "center",
+      "initial_owner": "player",
+      "initial_danger_level": 0,
+      "resource_ids": [
+        "hope"
+      ],
+      "special_target": null,
+      "can_build_outpost": false,
+      "neighbors": [
+        "a1_broken_pines",
+        "a2_frozen_creek",
+        "a3_ash_coal_slope"
+      ],
+      "actions": [
+        "manage"
+      ],
+      "description": "玩家营地中心，失守会触发失败。"
+    },
+    {
+      "id": "a1_broken_pines",
+      "code": "A1",
+      "name": "断松林",
+      "ring": "inner",
+      "initial_owner": "neutral",
+      "initial_danger_level": 1,
+      "resource_ids": [
+        "wood"
+      ],
+      "special_target": null,
+      "can_build_outpost": true,
+      "neighbors": [
+        "a0_camp",
+        "a2_frozen_creek",
+        "b1_scrap_yard"
+      ],
+      "actions": [
+        "scout",
+        "gather",
+        "build_outpost"
+      ],
+      "description": "内圈林带，可作为早期木材来源。"
+    },
+    {
+      "id": "a2_frozen_creek",
+      "code": "A2",
+      "name": "冻溪猎场",
+      "ring": "inner",
+      "initial_owner": "neutral",
+      "initial_danger_level": 1,
+      "resource_ids": [
+        "food"
+      ],
+      "special_target": null,
+      "can_build_outpost": true,
+      "neighbors": [
+        "a0_camp",
+        "a1_broken_pines",
+        "a3_ash_coal_slope",
+        "b2_old_clinic"
+      ],
+      "actions": [
+        "scout",
+        "gather",
+        "build_outpost"
+      ],
+      "description": "早期食物采集点，风险较低。"
+    },
+    {
+      "id": "a3_ash_coal_slope",
+      "code": "A3",
+      "name": "灰烬煤坡",
+      "ring": "inner",
+      "initial_owner": "neutral",
+      "initial_danger_level": 2,
+      "resource_ids": [
+        "coal"
+      ],
+      "special_target": null,
+      "can_build_outpost": true,
+      "neighbors": [
+        "a0_camp",
+        "a2_frozen_creek",
+        "b3_cracked_mine"
+      ],
+      "actions": [
+        "scout",
+        "gather",
+        "build_outpost"
+      ],
+      "description": "靠近营地的煤炭来源。"
+    },
+    {
+      "id": "b1_scrap_yard",
+      "code": "B1",
+      "name": "废车场",
+      "ring": "middle",
+      "initial_owner": "neutral",
+      "initial_danger_level": 3,
+      "resource_ids": [
+        "parts"
+      ],
+      "special_target": null,
+      "can_build_outpost": true,
+      "neighbors": [
+        "a1_broken_pines",
+        "b2_old_clinic",
+        "c1_northwind_woods"
+      ],
+      "actions": [
+        "scout",
+        "gather",
+        "build_outpost"
+      ],
+      "description": "中圈零件来源，适合工坊解锁后争取。"
+    },
+    {
+      "id": "b2_old_clinic",
+      "code": "B2",
+      "name": "白雾旧诊所",
+      "ring": "middle",
+      "initial_owner": "neutral",
+      "initial_danger_level": 3,
+      "resource_ids": [
+        "medicine"
+      ],
+      "special_target": null,
+      "can_build_outpost": true,
+      "neighbors": [
+        "a2_frozen_creek",
+        "b1_scrap_yard",
+        "b3_cracked_mine",
+        "c2_wreck_lake"
+      ],
+      "actions": [
+        "scout",
+        "gather",
+        "rescue",
+        "build_outpost"
+      ],
+      "description": "可回收药品，也可能触发搜救行动。"
+    },
+    {
+      "id": "b3_cracked_mine",
+      "code": "B3",
+      "name": "裂冰矿井",
+      "ring": "middle",
+      "initial_owner": "contested",
+      "initial_danger_level": 4,
+      "resource_ids": [
+        "coal",
+        "parts"
+      ],
+      "special_target": null,
+      "can_build_outpost": true,
+      "neighbors": [
+        "a3_ash_coal_slope",
+        "b2_old_clinic",
+        "b4_snowridge_tower",
+        "c3_blackflag_camp"
+      ],
+      "actions": [
+        "scout",
+        "gather",
+        "clear",
+        "build_outpost"
+      ],
+      "description": "高风险煤炭和零件区域。"
+    },
+    {
+      "id": "b4_snowridge_tower",
+      "code": "B4",
+      "name": "雪脊哨塔",
+      "ring": "middle",
+      "initial_owner": "enemy",
+      "initial_danger_level": 4,
+      "resource_ids": [],
+      "special_target": "intel",
+      "can_build_outpost": true,
+      "neighbors": [
+        "b3_cracked_mine",
+        "c3_blackflag_camp",
+        "c4_border_beacon"
+      ],
+      "actions": [
+        "scout",
+        "clear",
+        "build_outpost"
+      ],
+      "description": "敌方哨点，可提供情报和前哨视野。"
+    },
+    {
+      "id": "c1_northwind_woods",
+      "code": "C1",
+      "name": "北风林带",
+      "ring": "outer",
+      "initial_owner": "neutral",
+      "initial_danger_level": 4,
+      "resource_ids": [
+        "wood",
+        "food"
+      ],
+      "special_target": null,
+      "can_build_outpost": true,
+      "neighbors": [
+        "b1_scrap_yard",
+        "c2_wreck_lake"
+      ],
+      "actions": [
+        "scout",
+        "gather",
+        "build_outpost"
+      ],
+      "description": "外圈复合资源区域，适合建立稳定前哨。"
+    },
+    {
+      "id": "c2_wreck_lake",
+      "code": "C2",
+      "name": "沉船冻湖",
+      "ring": "outer",
+      "initial_owner": "contested",
+      "initial_danger_level": 4,
+      "resource_ids": [
+        "food",
+        "parts"
+      ],
+      "special_target": null,
+      "can_build_outpost": true,
+      "neighbors": [
+        "b2_old_clinic",
+        "c1_northwind_woods",
+        "c3_blackflag_camp"
+      ],
+      "actions": [
+        "scout",
+        "gather",
+        "clear",
+        "build_outpost"
+      ],
+      "description": "外圈争夺区域，能补充食物和零件。"
+    },
+    {
+      "id": "c3_blackflag_camp",
+      "code": "C3",
+      "name": "黑旗营垒",
+      "ring": "outer",
+      "initial_owner": "enemy",
+      "initial_danger_level": 5,
+      "resource_ids": [],
+      "special_target": "intel",
+      "can_build_outpost": false,
+      "neighbors": [
+        "b3_cracked_mine",
+        "b4_snowridge_tower",
+        "c2_wreck_lake",
+        "c4_border_beacon"
+      ],
+      "actions": [
+        "scout",
+        "clear"
+      ],
+      "description": "敌方核心营垒，清剿后可获得关键信息。"
+    },
+    {
+      "id": "c4_border_beacon",
+      "code": "C4",
+      "name": "边境信标站",
+      "ring": "outer",
+      "initial_owner": "enemy",
+      "initial_danger_level": 5,
+      "resource_ids": [],
+      "special_target": "beacon",
+      "can_build_outpost": false,
+      "neighbors": [
+        "b4_snowridge_tower",
+        "c3_blackflag_camp"
+      ],
+      "actions": [
+        "scout",
+        "clear",
+        "repair"
+      ],
+      "description": "终局目标区域，接触后可推进信标修复。"
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "items": [
+    {
+      "id": "pioneer_team",
+      "name": "开拓队",
+      "max_heroes": 2,
+      "food_cost": 4,
+      "power_bonus": 1,
+      "success_bonus_tags": {
+        "scout": 0.15,
+        "explore": 0.1
+      },
+      "description": "适合侦察、探索未知区域和发现资源点。"
+    },
+    {
+      "id": "guard_team",
+      "name": "护卫队",
+      "max_heroes": 2,
+      "food_cost": 6,
+      "power_bonus": 3,
+      "success_bonus_tags": {
+        "clear": 0.1,
+        "escort": 0.1,
+        "intercept": 0.15
+      },
+      "description": "适合护送、清剿和拦截敌方推进。"
+    },
+    {
+      "id": "rescue_team",
+      "name": "搜救队",
+      "max_heroes": 2,
+      "food_cost": 5,
+      "power_bonus": 1,
+      "success_bonus_tags": {
+        "rescue": 0.15,
+        "medical": 0.1
+      },
+      "description": "适合救援幸存者、回收药品和处理伤病事件。"
+    }
+  ]
+}

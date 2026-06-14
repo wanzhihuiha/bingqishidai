@@ -1,0 +1,480 @@
+{
+  "schema_version": 1,
+  "items": [
+    {
+      "id": "furnace",
+      "name": "寒炉",
+      "unlock_day": 1,
+      "max_level": 3,
+      "job_id": "engineer",
+      "levels": [
+        {
+          "level": 1,
+          "cost": {},
+          "production": {
+            "coal_cost_per_night": 6,
+            "heat_level": 1
+          },
+          "unlocks": [
+            "basic_survival"
+          ],
+          "effects": [],
+          "display_text": "提供基础供暖。"
+        },
+        {
+          "level": 2,
+          "cost": {
+            "wood": 20,
+            "parts": 5
+          },
+          "production": {
+            "coal_cost_per_night": 5,
+            "heat_level": 2
+          },
+          "unlocks": [],
+          "effects": [
+            {
+              "effect_type": "nightly_cost_modifier",
+              "target_id": "coal",
+              "value": -0.1,
+              "note": "提升供暖效率。"
+            }
+          ],
+          "display_text": "降低煤炭压力，提高低温抗性。"
+        },
+        {
+          "level": 3,
+          "cost": {
+            "wood": 35,
+            "parts": 12
+          },
+          "production": {
+            "coal_cost_per_night": 4,
+            "heat_level": 3
+          },
+          "unlocks": [
+            "storm_resistance"
+          ],
+          "effects": [
+            {
+              "effect_type": "injury_risk_modifier",
+              "target_id": "cold",
+              "value": -0.15,
+              "note": "降低低温伤病风险。"
+            }
+          ],
+          "display_text": "显著降低暴风雪期间的低温风险。"
+        }
+      ],
+      "description": "营地供暖核心，煤炭不足时会熄灭。"
+    },
+    {
+      "id": "lumber_yard",
+      "name": "伐木棚",
+      "unlock_day": 1,
+      "max_level": 3,
+      "job_id": "worker",
+      "levels": [
+        {
+          "level": 1,
+          "cost": {},
+          "production": {
+            "wood_per_worker": 3
+          },
+          "unlocks": [],
+          "effects": [],
+          "display_text": "工人每天生产少量木材。"
+        },
+        {
+          "level": 2,
+          "cost": {
+            "wood": 15
+          },
+          "production": {
+            "wood_per_worker": 4
+          },
+          "unlocks": [],
+          "effects": [],
+          "display_text": "提高木材产出。"
+        },
+        {
+          "level": 3,
+          "cost": {
+            "wood": 25,
+            "parts": 6
+          },
+          "production": {
+            "wood_per_worker": 5
+          },
+          "unlocks": [],
+          "effects": [
+            {
+              "effect_type": "daily_output_modifier",
+              "target_id": "wood",
+              "value": 0.1,
+              "note": "工具改良带来额外产出。"
+            }
+          ],
+          "display_text": "进一步提高木材产出。"
+        }
+      ],
+      "description": "提供稳定木材来源。"
+    },
+    {
+      "id": "hunter_lodge",
+      "name": "猎屋",
+      "unlock_day": 1,
+      "max_level": 3,
+      "job_id": "hunter",
+      "levels": [
+        {
+          "level": 1,
+          "cost": {},
+          "production": {
+            "food_per_hunter": 3
+          },
+          "unlocks": [],
+          "effects": [],
+          "display_text": "猎手每天生产少量食物。"
+        },
+        {
+          "level": 2,
+          "cost": {
+            "wood": 18,
+            "parts": 4
+          },
+          "production": {
+            "food_per_hunter": 4
+          },
+          "unlocks": [],
+          "effects": [],
+          "display_text": "提高食物产出。"
+        },
+        {
+          "level": 3,
+          "cost": {
+            "wood": 30,
+            "parts": 8
+          },
+          "production": {
+            "food_per_hunter": 5
+          },
+          "unlocks": [],
+          "effects": [
+            {
+              "effect_type": "injury_risk_modifier",
+              "target_id": "hunter",
+              "value": -0.05,
+              "note": "更好的装备降低狩猎风险。"
+            }
+          ],
+          "display_text": "提高食物产出并降低狩猎风险。"
+        }
+      ],
+      "description": "提供基础食物来源。"
+    },
+    {
+      "id": "kitchen",
+      "name": "厨房",
+      "unlock_day": 2,
+      "max_level": 3,
+      "job_id": "cook",
+      "levels": [
+        {
+          "level": 1,
+          "cost": {
+            "wood": 10
+          },
+          "production": {
+            "food_save_rate": 0.05
+          },
+          "unlocks": [
+            "food_efficiency"
+          ],
+          "effects": [],
+          "display_text": "略微降低夜晚食物消耗。"
+        },
+        {
+          "level": 2,
+          "cost": {
+            "wood": 20,
+            "parts": 4
+          },
+          "production": {
+            "food_save_rate": 0.1
+          },
+          "unlocks": [],
+          "effects": [],
+          "display_text": "继续降低食物消耗。"
+        },
+        {
+          "level": 3,
+          "cost": {
+            "wood": 30,
+            "parts": 8
+          },
+          "production": {
+            "food_save_rate": 0.15
+          },
+          "unlocks": [],
+          "effects": [
+            {
+              "effect_type": "daily_output_modifier",
+              "target_id": "hope",
+              "value": 1,
+              "note": "稳定热食提升营地士气。"
+            }
+          ],
+          "display_text": "显著降低食物压力，并稳定士气。"
+        }
+      ],
+      "description": "提升食物利用率，减轻夜晚消耗压力。"
+    },
+    {
+      "id": "medical_tent",
+      "name": "医务帐",
+      "unlock_day": 3,
+      "max_level": 3,
+      "job_id": "medic",
+      "levels": [
+        {
+          "level": 1,
+          "cost": {
+            "wood": 12,
+            "medicine": 2
+          },
+          "production": {
+            "heal_points_per_medic": 1
+          },
+          "unlocks": [
+            "basic_treatment"
+          ],
+          "effects": [],
+          "display_text": "允许医护治疗伤病。"
+        },
+        {
+          "level": 2,
+          "cost": {
+            "wood": 22,
+            "medicine": 4,
+            "parts": 4
+          },
+          "production": {
+            "heal_points_per_medic": 2
+          },
+          "unlocks": [],
+          "effects": [],
+          "display_text": "提高治疗效率。"
+        },
+        {
+          "level": 3,
+          "cost": {
+            "wood": 32,
+            "medicine": 6,
+            "parts": 8
+          },
+          "production": {
+            "heal_points_per_medic": 3
+          },
+          "unlocks": [],
+          "effects": [
+            {
+              "effect_type": "injury_risk_modifier",
+              "target_id": "death",
+              "value": -0.1,
+              "note": "降低重伤恶化风险。"
+            }
+          ],
+          "display_text": "提高治疗效率并降低死亡风险。"
+        }
+      ],
+      "description": "处理营地伤病，保障劳动力。"
+    },
+    {
+      "id": "workshop",
+      "name": "工坊",
+      "unlock_day": 8,
+      "max_level": 3,
+      "job_id": "engineer",
+      "levels": [
+        {
+          "level": 1,
+          "cost": {
+            "wood": 20,
+            "parts": 5
+          },
+          "production": {
+            "parts_per_engineer": 1
+          },
+          "unlocks": [
+            "basic_repair"
+          ],
+          "effects": [],
+          "display_text": "工程师可以生产零件。"
+        },
+        {
+          "level": 2,
+          "cost": {
+            "wood": 35,
+            "parts": 10
+          },
+          "production": {
+            "parts_per_engineer": 2
+          },
+          "unlocks": [],
+          "effects": [],
+          "display_text": "提高零件产出。"
+        },
+        {
+          "level": 3,
+          "cost": {
+            "wood": 50,
+            "parts": 18
+          },
+          "production": {
+            "parts_per_engineer": 3
+          },
+          "unlocks": [
+            "advanced_repair"
+          ],
+          "effects": [
+            {
+              "effect_type": "daily_output_modifier",
+              "target_id": "parts",
+              "value": 0.1,
+              "note": "改良工具提升零件产出。"
+            }
+          ],
+          "display_text": "显著提高零件和维修效率。"
+        }
+      ],
+      "description": "提供零件和维修能力。"
+    },
+    {
+      "id": "training_ground",
+      "name": "训练场",
+      "unlock_day": 8,
+      "max_level": 3,
+      "job_id": null,
+      "levels": [
+        {
+          "level": 1,
+          "cost": {
+            "wood": 18,
+            "food": 8
+          },
+          "production": {
+            "battle_power_bonus": 1
+          },
+          "unlocks": [
+            "squad_training"
+          ],
+          "effects": [],
+          "display_text": "小队获得少量战力加成。"
+        },
+        {
+          "level": 2,
+          "cost": {
+            "wood": 28,
+            "food": 12,
+            "parts": 6
+          },
+          "production": {
+            "battle_power_bonus": 2
+          },
+          "unlocks": [],
+          "effects": [],
+          "display_text": "提高小队战力加成。"
+        },
+        {
+          "level": 3,
+          "cost": {
+            "wood": 40,
+            "food": 18,
+            "parts": 12
+          },
+          "production": {
+            "battle_power_bonus": 3
+          },
+          "unlocks": [],
+          "effects": [
+            {
+              "effect_type": "success_rate_modifier",
+              "target_id": "expedition",
+              "value": 0.05,
+              "note": "训练提升行动稳定性。"
+            }
+          ],
+          "display_text": "提高战力并略微提高行动成功率。"
+        }
+      ],
+      "description": "提升英雄小队的自动战斗能力。"
+    },
+    {
+      "id": "outpost",
+      "name": "前哨站",
+      "unlock_day": 17,
+      "max_level": 3,
+      "job_id": "engineer",
+      "levels": [
+        {
+          "level": 1,
+          "cost": {
+            "wood": 20,
+            "parts": 8,
+            "coal": 5
+          },
+          "production": {
+            "outpost_hp": 10,
+            "outpost_yield_bonus": 0.1
+          },
+          "unlocks": [
+            "build_outpost"
+          ],
+          "effects": [],
+          "display_text": "允许在区域建立基础前哨。"
+        },
+        {
+          "level": 2,
+          "cost": {
+            "wood": 32,
+            "parts": 12,
+            "coal": 8
+          },
+          "production": {
+            "outpost_hp": 15,
+            "outpost_yield_bonus": 0.2
+          },
+          "unlocks": [],
+          "effects": [],
+          "display_text": "提高前哨耐久和产出稳定性。"
+        },
+        {
+          "level": 3,
+          "cost": {
+            "wood": 45,
+            "parts": 18,
+            "coal": 12
+          },
+          "production": {
+            "outpost_hp": 20,
+            "outpost_yield_bonus": 0.3
+          },
+          "unlocks": [
+            "enemy_warning"
+          ],
+          "effects": [
+            {
+              "effect_type": "outpost_yield_modifier",
+              "target_id": "outpost",
+              "value": 0.1,
+              "note": "前哨网络提高资源回收稳定性。"
+            }
+          ],
+          "display_text": "强化前哨并提供更可靠的预警。"
+        }
+      ],
+      "description": "用于地图区域驻扎、采集、预警和防守。"
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "initial_counts": {
+    "healthy": 12,
+    "light_wound": 0,
+    "heavy_wound": 0,
+    "dead": 0
+  },
+  "nightly_food_cost_per_person": 1,
+  "wounded_output_modifier": 0.5,
+  "death_hope_penalty": 15,
+  "states": [
+    {
+      "id": "healthy",
+      "name": "健康",
+      "can_work": true,
+      "output_modifier": 1.0,
+      "description": "可以正常工作。"
+    },
+    {
+      "id": "light_wound",
+      "name": "轻伤",
+      "can_work": true,
+      "output_modifier": 0.5,
+      "description": "可以工作，但产出降低。"
+    },
+    {
+      "id": "heavy_wound",
+      "name": "重伤",
+      "can_work": false,
+      "output_modifier": 0.0,
+      "description": "不能工作，需要治疗。"
+    },
+    {
+      "id": "dead",
+      "name": "死亡",
+      "can_work": false,
+      "output_modifier": 0.0,
+      "description": "永久移除，并降低希望值。"
+    }
+  ]
+}
