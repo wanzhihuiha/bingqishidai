@@ -134,3 +134,93 @@ func upgrade_furnace() -> Dictionary:
 		"message": "寒炉已升级到 %d 级" % next_level,
 		"level": next_level
 	}
+
+
+func build_building(building_id: String) -> Dictionary:
+	GameState.ensure_started()
+	var config: Dictionary = DataLoader.get_building_config(building_id)
+	if config.is_empty():
+		print("[BuildingManager] build_building failed reason=missing_config building=%s" % building_id)
+		return {
+			"success": false,
+			"message": "建筑数据缺失"
+		}
+
+	var building_name: String = str(config.get("name", building_id))
+	if GameState.is_building_built(building_id):
+		print("[BuildingManager] build_building failed reason=already_built building=%s" % building_id)
+		return {
+			"success": false,
+			"message": "%s 已建造" % building_name
+		}
+
+	var unlock_day: int = int(config.get("unlock_day", 1))
+	if GameState.day < unlock_day:
+		print("[BuildingManager] build_building failed reason=locked building=%s day=%d unlock_day=%d" % [
+			building_id,
+			GameState.day,
+			unlock_day
+		])
+		return {
+			"success": false,
+			"message": "%s 尚未解锁" % building_name
+		}
+
+	var levels: Array = config.get("levels", []) as Array
+	var first_level: Dictionary = {}
+	if not levels.is_empty() and typeof(levels[0]) == TYPE_DICTIONARY:
+		first_level = levels[0] as Dictionary
+	var cost: Dictionary = first_level.get("cost", {}) as Dictionary
+	var missing: Dictionary = _get_missing_resources(cost)
+	if not missing.is_empty():
+		var missing_text: String = _get_missing_resources_text(missing)
+		print("[BuildingManager] build_building failed reason=missing_resources building=%s missing=%s" % [
+			building_id,
+			str(missing)
+		])
+		return {
+			"success": false,
+			"message": missing_text,
+			"missing": missing
+		}
+
+	for resource_id_value: Variant in cost.keys():
+		var resource_id: String = str(resource_id_value)
+		var amount: int = int(cost.get(resource_id, 0))
+		if amount <= 0:
+			continue
+		GameState.add_resource(resource_id, -amount, "build_building:%s" % building_id)
+
+	GameState.build_building(building_id, "build_building")
+	print("[BuildingManager] build_building success building=%s cost=%s" % [building_id, str(cost)])
+	return {
+		"success": true,
+		"message": "%s 已建造" % building_name
+	}
+
+
+func _get_missing_resources(cost: Dictionary) -> Dictionary:
+	var missing: Dictionary = {}
+	for resource_id_value: Variant in cost.keys():
+		var resource_id: String = str(resource_id_value)
+		var need_amount: int = int(cost.get(resource_id, 0))
+		if need_amount <= 0:
+			continue
+		var current_amount: int = GameState.get_resource_amount(resource_id)
+		if current_amount < need_amount:
+			missing[resource_id] = need_amount - current_amount
+	return missing
+
+
+func _get_missing_resources_text(missing: Dictionary) -> String:
+	if missing.is_empty():
+		return ""
+
+	var parts: PackedStringArray = PackedStringArray()
+	for resource_id_value: Variant in missing.keys():
+		var resource_id: String = str(resource_id_value)
+		var resource_name: String = GameState.get_resource_name(resource_id)
+		var amount: int = int(missing.get(resource_id, 0))
+		parts.append("%s %d" % [resource_name, amount])
+
+	return "缺少：" + "、".join(parts)

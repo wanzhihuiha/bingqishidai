@@ -84,22 +84,29 @@ func _make_action_bar() -> HBoxContainer:
 	back_button.pressed.connect(_on_back_pressed)
 	actions.add_child(back_button)
 
+	var scout_button: Button = Button.new()
+	scout_button.text = "派出侦察队"
+	scout_button.custom_minimum_size = Vector2(160, 42)
+	scout_button.pressed.connect(_on_send_scout_pressed)
+	actions.add_child(scout_button)
+
+	var region_button: Button = Button.new()
+	region_button.text = "侦察断松林"
+	region_button.custom_minimum_size = Vector2(160, 42)
+	region_button.pressed.connect(_on_scout_first_region_pressed)
+	actions.add_child(region_button)
+
 	return actions
 
 
 func _load_regions() -> Array:
-	var file: FileAccess = FileAccess.open("res://data/regions.json", FileAccess.READ)
-	if file == null:
-		push_warning("[WorldMapView] regions.json not found")
-		return []
-
-	var parsed: Variant = JSON.parse_string(file.get_as_text())
-	if typeof(parsed) != TYPE_DICTIONARY:
-		push_warning("[WorldMapView] regions.json parse failed")
-		return []
-
-	var data: Dictionary = parsed as Dictionary
-	return data.get("items", []) as Array
+	var configs: Dictionary = DataLoader.get_region_configs()
+	var regions: Array = []
+	for region_id_value: Variant in configs.keys():
+		var region_id: String = str(region_id_value)
+		var region: Dictionary = configs.get(region_id, {}) as Dictionary
+		regions.append(region.duplicate(true))
+	return regions
 
 
 func _on_region_pressed(region: Dictionary) -> void:
@@ -140,3 +147,13 @@ func _join_values(values: Array) -> String:
 func _on_back_pressed() -> void:
 	print("[WorldMapView] button=back_to_shelter")
 	SceneRouter.go_to_shelter()
+
+
+func _on_send_scout_pressed() -> void:
+	print("[WorldMapView] button=send_scout_team")
+	GameState.send_first_scout_team("world_map_send_scout_team")
+
+
+func _on_scout_first_region_pressed() -> void:
+	print("[WorldMapView] button=scout_first_region")
+	GameState.scout_region("a1_broken_pines", "world_map_scout_first_region")

@@ -3,9 +3,11 @@ extends Node
 signal state_changed
 signal resources_changed
 signal temperature_changed
+signal quest_relevant_state_changed
 
 const DEFAULT_FURNACE_LEVEL: int = 1
 const DEFAULT_WEATHER_PRESSURE: float = 0.0
+const FIRST_SCOUT_REGION_ID: String = "a1_broken_pines"
 
 var day: int = 1
 var phase: String = "day"
@@ -19,6 +21,12 @@ var population: Dictionary = {
 var furnace_level: int = DEFAULT_FURNACE_LEVEL
 var temperature_score: int = 0
 var weather_pressure: float = DEFAULT_WEATHER_PRESSURE
+var collected_resources: Dictionary = {}
+var buildings: Dictionary = {}
+var assigned_jobs_total: int = 0
+var scout_state: Dictionary = {}
+var regions: Dictionary = {}
+var quests: Dictionary = {}
 var is_started: bool = false
 
 
@@ -29,6 +37,13 @@ func start_new_game() -> void:
 	population = _build_initial_population()
 	furnace_level = DEFAULT_FURNACE_LEVEL
 	weather_pressure = DEFAULT_WEATHER_PRESSURE
+	collected_resources = {}
+	buildings = _build_initial_buildings()
+	assigned_jobs_total = 0
+	scout_state = _build_initial_scout_state()
+	regions = _build_initial_regions()
+	quests = _build_initial_quests()
+	_update_building_unlocks_for_day("start_new_game")
 	refresh_temperature_score("start_new_game")
 	is_started = true
 	print("[GameState] start_new_game day=%d phase=%s resources=%s population=%s furnace_level=%d temperature_score=%d" % [
@@ -41,6 +56,7 @@ func start_new_game() -> void:
 	])
 	state_changed.emit()
 	resources_changed.emit()
+	quest_relevant_state_changed.emit()
 
 
 func ensure_started() -> void:
@@ -112,6 +128,7 @@ func set_furnace_level(level: int, source: String) -> void:
 	print("[GameState] set_furnace_level source=%s before=%d after=%d" % [source, before, furnace_level])
 	refresh_temperature_score("furnace_level_changed")
 	state_changed.emit()
+	quest_relevant_state_changed.emit()
 
 
 func transfer_population(from_state: String, to_state: String, amount: int, source: String) -> int:
@@ -151,7 +168,194 @@ func advance_day(source: String) -> void:
 	day += 1
 	phase = "day"
 	print("[GameState] advance_day source=%s before=%d after=%d phase=%s" % [source, before, day, phase])
+	_update_building_unlocks_for_day(source)
 	state_changed.emit()
+	quest_relevant_state_changed.emit()
+
+
+func mark_resource_collected(resource_id: String, source: String) -> void:
+	var before: bool = bool(collected_resources.get(resource_id, false))
+	collected_resources[resource_id] = true
+	print("[GameState] mark_resource_collected source=%s resource=%s before=%s after=true" % [
+		source,
+		resource_id,
+		str(before)
+	])
+	quest_relevant_state_changed.emit()
+	state_changed.emit()
+
+
+func was_resource_collected(resource_id: String) -> bool:
+	return bool(collected_resources.get(resource_id, false))
+
+
+func build_building(building_id: String, source: String) -> bool:
+	var state: Dictionary = buildings.get(building_id, {}) as Dictionary
+	if state.is_empty():
+		state = {
+			"is_unlocked": false,
+			"is_built": false,
+			"current_level": 0
+		}
+	var was_built: bool = bool(state.get("is_built", false))
+	state["is_unlocked"] = true
+	state["is_built"] = true
+	state["current_level"] = max(1, int(state.get("current_level", 0)))
+	buildings[building_id] = state
+	print("[GameState] build_building source=%s building=%s before_built=%s after_built=true" % [
+		source,
+		building_id,
+		str(was_built)
+	])
+	quest_relevant_state_changed.emit()
+	state_changed.emit()
+	return not was_built
+
+
+func unlock_building(building_id: String, source: String) -> bool:
+	var state: Dictionary = buildings.get(building_id, {}) as Dictionary
+	if state.is_empty():
+		state = {
+			"is_unlocked": false,
+			"is_built": false,
+			"current_level": 0
+		}
+	var was_unlocked: bool = bool(state.get("is_unlocked", false))
+	state["is_unlocked"] = true
+	buildings[building_id] = state
+	print("[GameState] unlock_building source=%s building=%s before_unlocked=%s after_unlocked=true" % [
+		source,
+		building_id,
+		str(was_unlocked)
+	])
+	quest_relevant_state_changed.emit()
+	state_changed.emit()
+	return not was_unlocked
+
+
+func is_building_built(building_id: String) -> bool:
+	var state: Dictionary = buildings.get(building_id, {}) as Dictionary
+	return bool(state.get("is_built", false))
+
+
+func is_building_unlocked(building_id: String) -> bool:
+	var state: Dictionary = buildings.get(building_id, {}) as Dictionary
+	return bool(state.get("is_unlocked", false))
+
+
+func get_building_level(building_id: String) -> int:
+	var state: Dictionary = buildings.get(building_id, {}) as Dictionary
+	return int(state.get("current_level", 0))
+
+
+func assign_jobs_total(amount: int, source: String) -> void:
+	var before: int = assigned_jobs_total
+	var max_assignable: int = get_healthy_population()
+	assigned_jobs_total = int(clamp(amount, 0, max_assignable))
+	print("[GameState] assign_jobs_total source=%s before=%d requested=%d after=%d max=%d" % [
+		source,
+		before,
+		amount,
+		assigned_jobs_total,
+		max_assignable
+	])
+	quest_relevant_state_changed.emit()
+	state_changed.emit()
+
+
+func send_first_scout_team(source: String) -> bool:
+	var before: bool = bool(scout_state.get("first_scout_team_sent", false))
+	scout_state["first_scout_team_sent"] = true
+	print("[GameState] send_first_scout_team source=%s before=%s after=true" % [
+		source,
+		str(before)
+	])
+	quest_relevant_state_changed.emit()
+	state_changed.emit()
+	return not before
+
+
+func was_first_scout_team_sent() -> bool:
+	return bool(scout_state.get("first_scout_team_sent", false))
+
+
+func scout_region(region_id: String, source: String) -> bool:
+	var state: Dictionary = regions.get(region_id, {}) as Dictionary
+	if state.is_empty():
+		state = {
+			"is_scouted": false
+		}
+	var before: bool = bool(state.get("is_scouted", false))
+	state["is_scouted"] = true
+	regions[region_id] = state
+	print("[GameState] scout_region source=%s region=%s before=%s after=true" % [
+		source,
+		region_id,
+		str(before)
+	])
+	quest_relevant_state_changed.emit()
+	state_changed.emit()
+	return not before
+
+
+func is_region_scouted(region_id: String) -> bool:
+	var state: Dictionary = regions.get(region_id, {}) as Dictionary
+	return bool(state.get("is_scouted", false))
+
+
+func initialize_quest_state(first_quest_id: String) -> void:
+	quests = {
+		"current_quest_id": first_quest_id,
+		"completed": {},
+		"rewarded": {}
+	}
+	print("[GameState] initialize_quest_state current=%s" % first_quest_id)
+	quest_relevant_state_changed.emit()
+	state_changed.emit()
+
+
+func get_current_quest_id() -> String:
+	return str(quests.get("current_quest_id", ""))
+
+
+func set_current_quest_id(quest_id: String, source: String) -> void:
+	var before: String = get_current_quest_id()
+	quests["current_quest_id"] = quest_id
+	print("[GameState] set_current_quest_id source=%s before=%s after=%s" % [
+		source,
+		before,
+		quest_id
+	])
+	quest_relevant_state_changed.emit()
+	state_changed.emit()
+
+
+func mark_quest_completed(quest_id: String, source: String) -> void:
+	var completed: Dictionary = quests.get("completed", {}) as Dictionary
+	completed[quest_id] = true
+	quests["completed"] = completed
+	print("[GameState] mark_quest_completed source=%s quest=%s" % [source, quest_id])
+	quest_relevant_state_changed.emit()
+	state_changed.emit()
+
+
+func is_quest_completed(quest_id: String) -> bool:
+	var completed: Dictionary = quests.get("completed", {}) as Dictionary
+	return bool(completed.get(quest_id, false))
+
+
+func mark_quest_rewarded(quest_id: String, source: String) -> void:
+	var rewarded: Dictionary = quests.get("rewarded", {}) as Dictionary
+	rewarded[quest_id] = true
+	quests["rewarded"] = rewarded
+	print("[GameState] mark_quest_rewarded source=%s quest=%s" % [source, quest_id])
+	quest_relevant_state_changed.emit()
+	state_changed.emit()
+
+
+func is_quest_rewarded(quest_id: String) -> bool:
+	var rewarded: Dictionary = quests.get("rewarded", {}) as Dictionary
+	return bool(rewarded.get(quest_id, false))
 
 
 func refresh_temperature_score(source: String = "manual") -> void:
@@ -218,6 +422,90 @@ func _build_initial_population() -> Dictionary:
 		"heavy_wound": int(counts.get("heavy_wound", 0)),
 		"dead": int(counts.get("dead", 0))
 	}
+
+
+func _build_initial_buildings() -> Dictionary:
+	var result: Dictionary = {}
+	var configs: Dictionary = DataLoader.get_building_configs()
+
+	for building_id_value: Variant in configs.keys():
+		var building_id: String = str(building_id_value)
+		var config: Dictionary = configs.get(building_id, {}) as Dictionary
+		var unlock_day: int = int(config.get("unlock_day", 1))
+		var is_initial: bool = unlock_day <= day
+		var current_level: int = 0
+		var is_built: bool = false
+		if building_id == "furnace":
+			current_level = DEFAULT_FURNACE_LEVEL
+			is_built = true
+		result[building_id] = {
+			"is_unlocked": is_initial,
+			"is_built": is_built,
+			"current_level": current_level
+		}
+
+	return result
+
+
+func _build_initial_scout_state() -> Dictionary:
+	return {
+		"first_scout_team_sent": false
+	}
+
+
+func _build_initial_regions() -> Dictionary:
+	return {
+		FIRST_SCOUT_REGION_ID: {
+			"is_scouted": false
+		}
+	}
+
+
+func _build_initial_quests() -> Dictionary:
+	var quest_order: Array[String] = DataLoader.get_quest_order()
+	var first_quest_id: String = ""
+	if not quest_order.is_empty():
+		first_quest_id = quest_order[0]
+	return {
+		"current_quest_id": first_quest_id,
+		"completed": {},
+		"rewarded": {}
+	}
+
+
+func _update_building_unlocks_for_day(source: String) -> void:
+	var configs: Dictionary = DataLoader.get_building_configs()
+	var changed: bool = false
+
+	for building_id_value: Variant in configs.keys():
+		var building_id: String = str(building_id_value)
+		var config: Dictionary = configs.get(building_id, {}) as Dictionary
+		var unlock_day: int = int(config.get("unlock_day", 1))
+		if day < unlock_day:
+			continue
+
+		var state: Dictionary = buildings.get(building_id, {}) as Dictionary
+		if state.is_empty():
+			state = {
+				"is_unlocked": false,
+				"is_built": false,
+				"current_level": 0
+			}
+		if bool(state.get("is_unlocked", false)):
+			continue
+
+		state["is_unlocked"] = true
+		buildings[building_id] = state
+		changed = true
+		print("[GameState] unlock_building_by_day source=%s building=%s unlock_day=%d current_day=%d" % [
+			source,
+			building_id,
+			unlock_day,
+			day
+		])
+
+	if changed:
+		quest_relevant_state_changed.emit()
 
 
 func _clamp_resource(resource_id: String, amount: int) -> int:

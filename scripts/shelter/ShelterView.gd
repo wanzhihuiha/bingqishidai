@@ -44,6 +44,11 @@ var furnace_cost_label: Label
 var furnace_message_label: Label
 var furnace_upgrade_button: Button
 var collect_cards: Dictionary = {}
+var quest_title_label: Label
+var quest_progress_label: Label
+var quest_reward_label: Label
+var building_status_labels: Dictionary = {}
+var action_message_label: Label
 
 
 func _ready() -> void:
@@ -56,6 +61,8 @@ func _ready() -> void:
 		GameState.resources_changed.connect(_refresh_hud)
 	if not GameState.temperature_changed.is_connected(_refresh_hud):
 		GameState.temperature_changed.connect(_refresh_hud)
+	if not GameState.quest_relevant_state_changed.is_connected(_refresh_quest_panel):
+		GameState.quest_relevant_state_changed.connect(_refresh_quest_panel)
 	_build_ui()
 	_refresh_hud()
 
@@ -77,14 +84,27 @@ func _build_ui() -> void:
 	layout.add_theme_constant_override("separation", 18)
 	root.add_child(layout)
 
-	layout.add_child(_make_hud())
-	layout.add_child(_make_center_panel())
-	layout.add_child(_make_action_bar())
+	var content: HBoxContainer = HBoxContainer.new()
+	content.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content.add_theme_constant_override("separation", 16)
+	layout.add_child(content)
+
+	var left_column: VBoxContainer = VBoxContainer.new()
+	left_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left_column.add_theme_constant_override("separation", 16)
+	content.add_child(left_column)
+
+	left_column.add_child(_make_hud())
+	left_column.add_child(_make_center_panel())
+	left_column.add_child(_make_action_bar())
+	content.add_child(_make_quest_panel())
 
 
-func _make_hud() -> HBoxContainer:
-	var hud: HBoxContainer = HBoxContainer.new()
-	hud.add_theme_constant_override("separation", 14)
+func _make_hud() -> GridContainer:
+	var hud: GridContainer = GridContainer.new()
+	hud.columns = 4
+	hud.add_theme_constant_override("h_separation", 12)
+	hud.add_theme_constant_override("v_separation", 8)
 	day_label = _make_hud_label("")
 	hud.add_child(day_label)
 
@@ -287,6 +307,7 @@ func _on_collect_pressed(resource_id: String, amount: int) -> void:
 
 	var before: int = GameState.get_resource_amount(resource_id)
 	GameState.add_resource(resource_id, amount, "collect_resource")
+	GameState.mark_resource_collected(resource_id, "collect_resource")
 	var after: int = GameState.get_resource_amount(resource_id)
 	print("collect_resource resource_id=%s amount=%d before=%d after=%d" % [resource_id, amount, before, after])
 	card["cooldown_left"] = COLLECT_COOLDOWN_SECONDS
@@ -330,6 +351,25 @@ func _on_furnace_upgrade_pressed() -> void:
 	_refresh_hud()
 
 
+func build_kitchen() -> void:
+	var result: Dictionary = BuildingManager.build_building("kitchen")
+	var message: String = str(result.get("message", ""))
+	var success: bool = bool(result.get("success", false))
+	_show_action_message(message, success)
+	_refresh_hud()
+
+
+func assign_three_jobs() -> void:
+	GameState.assign_jobs_total(3, "assign_three_jobs")
+	var assigned: int = GameState.assigned_jobs_total
+	var success: bool = assigned >= 3
+	if success:
+		_show_action_message("已分配 3 名幸存者岗位", true)
+	else:
+		_show_action_message("可用健康幸存者不足 3 名", false)
+	_refresh_quest_panel()
+
+
 func _play_furnace_upgrade_feedback(success: bool) -> void:
 	if furnace_upgrade_button == null:
 		return
@@ -343,24 +383,100 @@ func _play_furnace_upgrade_feedback(success: bool) -> void:
 	tween.tween_property(furnace_upgrade_button, "modulate", Color.WHITE, 0.2)
 
 
-func _make_action_bar() -> HBoxContainer:
-	var actions: HBoxContainer = HBoxContainer.new()
-	actions.alignment = BoxContainer.ALIGNMENT_CENTER
-	actions.add_theme_constant_override("separation", 16)
+func _make_action_bar() -> VBoxContainer:
+	var actions: VBoxContainer = VBoxContainer.new()
+	actions.add_theme_constant_override("separation", 8)
+
+	var buttons: HBoxContainer = HBoxContainer.new()
+	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
+	buttons.add_theme_constant_override("separation", 12)
+	actions.add_child(buttons)
 
 	var world_button: Button = Button.new()
 	world_button.text = "进入冰原地图"
-	world_button.custom_minimum_size = Vector2(180, 42)
+	world_button.custom_minimum_size = Vector2(150, 42)
 	world_button.pressed.connect(_on_world_map_pressed)
-	actions.add_child(world_button)
+	buttons.add_child(world_button)
 
 	var end_day_button: Button = Button.new()
 	end_day_button.text = "结束一天"
-	end_day_button.custom_minimum_size = Vector2(180, 42)
+	end_day_button.custom_minimum_size = Vector2(150, 42)
 	end_day_button.pressed.connect(_on_end_day_pressed)
-	actions.add_child(end_day_button)
+	buttons.add_child(end_day_button)
+
+	var kitchen_button: Button = Button.new()
+	kitchen_button.text = "建造厨房"
+	kitchen_button.custom_minimum_size = Vector2(150, 42)
+	kitchen_button.pressed.connect(_on_build_kitchen_pressed)
+	buttons.add_child(kitchen_button)
+
+	var job_button: Button = Button.new()
+	job_button.text = "分配岗位"
+	job_button.custom_minimum_size = Vector2(150, 42)
+	job_button.pressed.connect(_on_assign_jobs_pressed)
+	buttons.add_child(job_button)
+
+	action_message_label = Label.new()
+	action_message_label.custom_minimum_size = Vector2(0, 28)
+	action_message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	action_message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	actions.add_child(action_message_label)
 
 	return actions
+
+
+func _make_quest_panel() -> PanelContainer:
+	var panel: PanelContainer = PanelContainer.new()
+	panel.custom_minimum_size = Vector2(300, 0)
+	panel.size_flags_horizontal = Control.SIZE_SHRINK_END
+	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+
+	var box: VBoxContainer = VBoxContainer.new()
+	box.add_theme_constant_override("separation", 12)
+	panel.add_child(box)
+
+	var title: Label = Label.new()
+	title.text = "当前目标"
+	title.add_theme_font_size_override("font_size", 24)
+	box.add_child(title)
+
+	quest_title_label = Label.new()
+	quest_title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(quest_title_label)
+
+	quest_progress_label = Label.new()
+	quest_progress_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(quest_progress_label)
+
+	quest_reward_label = Label.new()
+	quest_reward_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(quest_reward_label)
+
+	var divider: HSeparator = HSeparator.new()
+	box.add_child(divider)
+
+	var building_title: Label = Label.new()
+	building_title.text = "建筑状态"
+	building_title.add_theme_font_size_override("font_size", 22)
+	box.add_child(building_title)
+
+	_add_building_status_row(box, "furnace")
+	_add_building_status_row(box, "lumber_yard")
+	_add_building_status_row(box, "hunter_lodge")
+	_add_building_status_row(box, "kitchen")
+	_add_building_status_row(box, "medical_tent")
+	_add_building_status_row(box, "workshop")
+	_add_building_status_row(box, "training_ground")
+	_add_building_status_row(box, "outpost")
+
+	return panel
+
+
+func _add_building_status_row(container: VBoxContainer, building_id: String) -> void:
+	var label: Label = Label.new()
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	container.add_child(label)
+	building_status_labels[building_id] = label
 
 
 func _refresh_hud() -> void:
@@ -389,6 +505,7 @@ func _refresh_hud() -> void:
 		]
 
 	_refresh_furnace_card()
+	_refresh_quest_panel()
 
 
 func _on_world_map_pressed() -> void:
@@ -412,3 +529,67 @@ func _show_night_settlement_popup(result: Dictionary) -> void:
 	add_child(popup)
 	if popup.has_method("show_result"):
 		popup.call("show_result", result)
+
+
+func _on_build_kitchen_pressed() -> void:
+	print("[ShelterView] button=build_kitchen")
+	build_kitchen()
+
+
+func _on_assign_jobs_pressed() -> void:
+	print("[ShelterView] button=assign_jobs")
+	assign_three_jobs()
+
+
+func _refresh_quest_panel() -> void:
+	if quest_title_label == null:
+		return
+
+	var title: String = ""
+	var progress: String = ""
+	var reward: String = ""
+	title = str(QuestManager.get_current_quest_title())
+	progress = str(QuestManager.get_current_quest_progress_text())
+	reward = str(QuestManager.get_current_quest_reward_text())
+
+	if title.is_empty():
+		title = "暂无目标"
+	quest_title_label.text = title
+	quest_progress_label.text = "进度：%s" % progress
+	quest_reward_label.text = "奖励：%s" % reward
+	_refresh_building_status_panel()
+
+
+func _refresh_building_status_panel() -> void:
+	for building_id_value: Variant in building_status_labels.keys():
+		var building_id: String = str(building_id_value)
+		var label: Label = building_status_labels.get(building_id) as Label
+		if label == null:
+			continue
+
+		var config: Dictionary = DataLoader.get_building_config(building_id)
+		var building_name: String = str(config.get("name", building_id))
+		var unlock_day: int = int(config.get("unlock_day", 1))
+		var is_unlocked: bool = GameState.is_building_unlocked(building_id)
+		var is_built: bool = GameState.is_building_built(building_id)
+		var level: int = GameState.get_building_level(building_id)
+		var status_text: String = ""
+
+		if is_built:
+			status_text = "已建造，等级 %d" % level
+		elif is_unlocked:
+			status_text = "已解锁"
+		else:
+			status_text = "未解锁，第 %d 天开放" % unlock_day
+
+		label.text = "%s：%s" % [building_name, status_text]
+
+
+func _show_action_message(message: String, success: bool) -> void:
+	if action_message_label == null:
+		return
+	action_message_label.text = message
+	if success:
+		action_message_label.add_theme_color_override("font_color", Color(0.25, 0.75, 0.35, 1.0))
+	else:
+		action_message_label.add_theme_color_override("font_color", Color(1.0, 0.25, 0.18, 1.0))

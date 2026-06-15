@@ -2,15 +2,116 @@
   "schema_version": 1,
   "items": [
     {
-      "id": "guide_assign_workers",
+      "id": "guide_collect_wood_once",
       "type": "guide",
-      "title": "分配第一批岗位",
-      "description": "为营地分配至少 3 名幸存者到岗位。",
+      "title": "收取一次木材",
+      "description": "从伐木棚收取一次木材，确认营地有基础建设材料。",
+      "unlock_day": 1,
+      "conditions": {},
+      "target": {
+        "type": "resource_collected_once",
+        "resource_id": "wood",
+        "value": 1,
+        "progress_text": "木材收取"
+      },
+      "rewards": [
+        {
+          "effect_type": "resource_delta",
+          "target_id": "wood",
+          "value": 3,
+          "note": "整理伐木棚库存。"
+        }
+      ],
+      "next_quest_ids": [
+        "guide_collect_food_once"
+      ]
+    },
+    {
+      "id": "guide_collect_food_once",
+      "type": "guide",
+      "title": "收取一次食物",
+      "description": "从猎屋收取一次食物，为夜晚消耗做准备。",
+      "unlock_day": 1,
+      "conditions": {},
+      "target": {
+        "type": "resource_collected_once",
+        "resource_id": "food",
+        "value": 1,
+        "progress_text": "食物收取"
+      },
+      "rewards": [
+        {
+          "effect_type": "resource_delta",
+          "target_id": "food",
+          "value": 3,
+          "note": "整理猎屋补给。"
+        }
+      ],
+      "next_quest_ids": [
+        "guide_upgrade_furnace_level_2"
+      ]
+    },
+    {
+      "id": "guide_upgrade_furnace_level_2",
+      "type": "guide",
+      "title": "升级寒炉到 2 级",
+      "description": "提升寒炉等级，增强营地供暖能力。",
+      "unlock_day": 1,
+      "conditions": {},
+      "target": {
+        "type": "building_level",
+        "building_id": "furnace",
+        "level": 2,
+        "progress_text": "寒炉等级"
+      },
+      "rewards": [
+        {
+          "effect_type": "resource_delta",
+          "target_id": "hope",
+          "value": 2,
+          "note": "供暖改善让营地更安心。"
+        }
+      ],
+      "next_quest_ids": [
+        "guide_build_kitchen"
+      ]
+    },
+    {
+      "id": "guide_build_kitchen",
+      "type": "guide",
+      "title": "建造厨房",
+      "description": "建造厨房，开始改善食物利用率。",
+      "unlock_day": 1,
+      "conditions": {},
+      "target": {
+        "type": "building_built",
+        "building_id": "kitchen",
+        "value": 1,
+        "progress_text": "厨房建造"
+      },
+      "rewards": [
+        {
+          "effect_type": "resource_delta",
+          "target_id": "food",
+          "value": 2,
+          "note": "厨房整理出额外口粮。"
+        }
+      ],
+      "next_quest_ids": [
+        "guide_assign_three_jobs"
+      ]
+    },
+    {
+      "id": "guide_assign_three_jobs",
+      "type": "guide",
+      "title": "分配 3 名幸存者岗位",
+      "description": "安排至少 3 名健康幸存者投入基础工作。",
       "unlock_day": 1,
       "conditions": {},
       "target": {
         "type": "job_assignment_total",
-        "value": 3
+        "value": 3,
+        "progress_text": "岗位人数"
       },
       "rewards": [
         {
@@ -21,77 +122,79 @@
         }
       ],
       "next_quest_ids": [
-        "guide_upgrade_furnace"
+        "guide_unlock_training_ground"
       ]
     },
     {
-      "id": "guide_upgrade_furnace",
+      "id": "guide_unlock_training_ground",
       "type": "guide",
-      "title": "升级寒炉",
-      "description": "将寒炉提升到 2 级，降低夜晚低温风险。",
-      "unlock_day": 2,
-      "conditions": {},
-      "target": {
-        "type": "building_level",
-        "building_id": "furnace",
-        "level": 2
-      },
-      "rewards": [],
-      "next_quest_ids": [
-        "main_repair_border_beacon"
-      ]
-    },
-    {
-      "id": "main_survive_30_days",
-      "type": "main",
-      "title": "守住 30 天",
-      "description": "在 30 天战役中保持营地未失败。",
+      "title": "解锁训练场",
+      "description": "完成前期安排后，解锁训练场，为后续小队行动做准备。",
       "unlock_day": 1,
       "conditions": {},
       "target": {
-        "type": "survive_until_day",
-        "day": 30
+        "type": "building_unlocked",
+        "building_id": "training_ground",
+        "value": 1,
+        "progress_text": "训练场解锁"
       },
-      "rewards": [],
-      "next_quest_ids": []
+      "rewards": [
+        {
+          "effect_type": "resource_delta",
+          "target_id": "parts",
+          "value": 1,
+          "note": "训练场整理出可用零件。"
+        }
+      ],
+      "next_quest_ids": [
+        "guide_send_first_scout_team"
+      ]
     },
     {
-      "id": "main_repair_border_beacon",
-      "type": "main",
-      "title": "修复边境信标",
-      "description": "接触 C4 区域并完成信标修复进度。",
-      "unlock_day": 17,
-      "conditions": {
-        "required_region_id": "c4_border_beacon"
-      },
+      "id": "guide_send_first_scout_team",
+      "type": "guide",
+      "title": "派出第一支侦察队",
+      "description": "派出一支侦察队，准备接触营地外的冰原区域。",
+      "unlock_day": 1,
+      "conditions": {},
       "target": {
-        "type": "beacon_repair_progress",
-        "value": 2
+        "type": "scout_team_sent",
+        "value": 1,
+        "progress_text": "侦察队派出"
+      },
+      "rewards": [
+        {
+          "effect_type": "resource_delta",
+          "target_id": "food",
+          "value": 2,
+          "note": "侦察补给打包完成。"
+        }
+      ],
+      "next_quest_ids": [
+        "guide_scout_first_region"
+      ]
+    },
+    {
+      "id": "guide_scout_first_region",
+      "type": "guide",
+      "title": "侦察第一个冰原区域",
+      "description": "侦察断松林，确认营地外第一处资源区域。",
+      "unlock_day": 1,
+      "conditions": {},
+      "target": {
+        "type": "region_scouted",
+        "region_id": "a1_broken_pines",
+        "value": 1,
+        "progress_text": "断松林侦察"
       },
       "rewards": [
         {
           "effect_type": "resource_delta",
           "target_id": "hope",
-          "value": 10,
-          "note": "信标修复带来希望。"
+          "value": 3,
+          "note": "营地确认了第一条外出路线。"
         }
       ],
-      "next_quest_ids": [
-        "main_send_beacon"
-      ]
-    },
-    {
-      "id": "main_send_beacon",
-      "type": "main",
-      "title": "发送边境信标",
-      "description": "在终局阶段成功发送信标。",
-      "unlock_day": 28,
-      "conditions": {},
-      "target": {
-        "type": "beacon_signal_sent",
-        "value": true
-      },
-      "rewards": [],
       "next_quest_ids": []
     }
   ]
