@@ -19,6 +19,7 @@ config/icon="res://icon.svg"
 
 DataLoader="*res://scripts/managers/DataLoader.gd"
 BuildingManager="*res://scripts/managers/BuildingManager.gd"
+NightSettlementManager="*res://scripts/managers/NightSettlementManager.gd"
 GameState="*res://scripts/managers/GameState.gd"
 SceneRouter="*res://scripts/managers/SceneRouter.gd"
 

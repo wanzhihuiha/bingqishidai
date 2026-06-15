@@ -1,0 +1,220 @@
+extends Node
+
+const FOOD_COST_PER_PERSON: int = 1
+const COAL_COST_PER_FURNACE_LEVEL: int = 2
+
+
+func settle_night() -> Dictionary:
+	GameState.ensure_started()
+
+	var day_before: int = GameState.day
+	var alive_population: int = GameState.get_alive_population()
+	var food_before: int = GameState.get_resource_amount("food")
+	var coal_before: int = GameState.get_resource_amount("coal")
+	var hope_before: int = GameState.get_resource_amount("hope")
+	var healthy_before: int = GameState.get_healthy_population()
+	var sick_before: int = GameState.get_sick_population()
+	var temperature_score_before: int = GameState.temperature_score
+	var temperature_status_before: String = GameState.get_temperature_status()
+
+	var food_need: int = alive_population * FOOD_COST_PER_PERSON
+	var food_paid: int = _min_int(food_before, food_need)
+	var food_shortage: int = food_need - food_paid
+	if food_paid > 0:
+		GameState.add_resource("food", -food_paid, "night_settlement_food")
+
+	var coal_need: int = GameState.furnace_level * COAL_COST_PER_FURNACE_LEVEL
+	var coal_paid: int = _min_int(coal_before, coal_need)
+	var coal_shortage: int = coal_need - coal_paid
+	if coal_paid > 0:
+		GameState.add_resource_with_refresh("coal", -coal_paid, "night_settlement_coal", false)
+
+	var hope_delta: int = 0
+	var hope_reasons: Array[String] = []
+	var health_changes: Array[String] = []
+
+	if temperature_status_before == "危险":
+		var cold_sick_added: int = GameState.transfer_population("healthy", "light_wound", 1, "night_temperature_danger")
+		if cold_sick_added > 0:
+			health_changes.append("温度危险，%d 名健康幸存者转为轻伤" % cold_sick_added)
+		else:
+			health_changes.append("温度危险，但没有健康幸存者可转为轻伤")
+		hope_delta -= 5
+		hope_reasons.append("温度危险，希望值 -5")
+	elif temperature_status_before == "温暖":
+		hope_delta += 2
+		hope_reasons.append("温度温暖，希望值 +2")
+
+	if food_shortage > 0:
+		var food_health_change: Dictionary = _apply_food_shortage_health_drop()
+		health_changes.append(str(food_health_change.get("message", "食物不足，健康下降")))
+		hope_delta -= 8
+		hope_reasons.append("食物不足，希望值 -8")
+
+	if hope_delta != 0:
+		GameState.add_resource("hope", hope_delta, "night_settlement_hope")
+
+	var food_after: int = GameState.get_resource_amount("food")
+	var coal_after: int = GameState.get_resource_amount("coal")
+	var hope_after: int = GameState.get_resource_amount("hope")
+	var healthy_after: int = GameState.get_healthy_population()
+	var sick_after: int = GameState.get_sick_population()
+
+	GameState.advance_day("night_settlement")
+	GameState.refresh_temperature_score("night_settlement_next_day")
+
+	var result: Dictionary = {
+		"day_before": day_before,
+		"day_after": GameState.day,
+		"alive_population": alive_population,
+		"food": {
+			"need": food_need,
+			"paid": food_paid,
+			"shortage": food_shortage,
+			"before": food_before,
+			"after": food_after
+		},
+		"coal": {
+			"need": coal_need,
+			"paid": coal_paid,
+			"shortage": coal_shortage,
+			"before": coal_before,
+			"after": coal_after
+		},
+		"temperature": {
+			"score": temperature_score_before,
+			"status": temperature_status_before
+		},
+		"health": {
+			"healthy_before": healthy_before,
+			"healthy_after": healthy_after,
+			"sick_before": sick_before,
+			"sick_after": sick_after,
+			"changes": health_changes
+		},
+		"hope": {
+			"before": hope_before,
+			"after": hope_after,
+			"delta": hope_after - hope_before,
+			"reasons": hope_reasons
+		}
+	}
+	result["lines"] = _build_display_lines(result)
+
+	print("[NightSettlementManager] settle_night day=%d->%d alive=%d food_need=%d food_paid=%d food_shortage=%d food_before=%d food_after=%d coal_need=%d coal_paid=%d coal_shortage=%d coal_before=%d coal_after=%d temperature_score=%d temperature_status=%s healthy=%d->%d sick=%d->%d hope=%d->%d hope_reasons=%s health_changes=%s" % [
+		day_before,
+		GameState.day,
+		alive_population,
+		food_need,
+		food_paid,
+		food_shortage,
+		food_before,
+		food_after,
+		coal_need,
+		coal_paid,
+		coal_shortage,
+		coal_before,
+		coal_after,
+		temperature_score_before,
+		temperature_status_before,
+		healthy_before,
+		healthy_after,
+		sick_before,
+		sick_after,
+		hope_before,
+		hope_after,
+		_join_string_array(hope_reasons, "无"),
+		_join_string_array(health_changes, "无")
+	])
+
+	return result
+
+
+func _apply_food_shortage_health_drop() -> Dictionary:
+	var healthy_to_light: int = GameState.transfer_population("healthy", "light_wound", 1, "night_food_shortage")
+	if healthy_to_light > 0:
+		return {
+			"amount": healthy_to_light,
+			"message": "食物不足，%d 名健康幸存者转为轻伤" % healthy_to_light
+		}
+
+	var light_to_heavy: int = GameState.transfer_population("light_wound", "heavy_wound", 1, "night_food_shortage")
+	if light_to_heavy > 0:
+		return {
+			"amount": light_to_heavy,
+			"message": "食物不足，%d 名轻伤幸存者转为重伤" % light_to_heavy
+		}
+
+	return {
+		"amount": 0,
+		"message": "食物不足，但没有可继续恶化的幸存者"
+	}
+
+
+func _build_display_lines(result: Dictionary) -> Array[String]:
+	var food: Dictionary = result.get("food", {}) as Dictionary
+	var coal: Dictionary = result.get("coal", {}) as Dictionary
+	var temperature: Dictionary = result.get("temperature", {}) as Dictionary
+	var health: Dictionary = result.get("health", {}) as Dictionary
+	var hope: Dictionary = result.get("hope", {}) as Dictionary
+	var hope_reasons: Array[String] = _to_string_array(hope.get("reasons", []))
+	var health_changes: Array[String] = _to_string_array(health.get("changes", []))
+
+	var lines: Array[String] = []
+	lines.append("食物消耗：需要 %d，消耗 %d，缺口 %d，剩余 %d" % [
+		int(food.get("need", 0)),
+		int(food.get("paid", 0)),
+		int(food.get("shortage", 0)),
+		int(food.get("after", 0))
+	])
+	lines.append("煤炭消耗：寒炉 %d 级，需要 %d，消耗 %d，缺口 %d，剩余 %d" % [
+		GameState.furnace_level,
+		int(coal.get("need", 0)),
+		int(coal.get("paid", 0)),
+		int(coal.get("shortage", 0)),
+		int(coal.get("after", 0))
+	])
+	lines.append("温度结果：%d（%s）" % [
+		int(temperature.get("score", 0)),
+		str(temperature.get("status", "未知"))
+	])
+	lines.append("健康变化：健康 %d -> %d，病患 %d -> %d" % [
+		int(health.get("healthy_before", 0)),
+		int(health.get("healthy_after", 0)),
+		int(health.get("sick_before", 0)),
+		int(health.get("sick_after", 0))
+	])
+	lines.append("健康原因：%s" % _join_string_array(health_changes, "无变化"))
+	lines.append("希望值变化：%d -> %d（%s）" % [
+		int(hope.get("before", 0)),
+		int(hope.get("after", 0)),
+		_join_string_array(hope_reasons, "无变化")
+	])
+	return lines
+
+
+func _join_string_array(items: Array[String], empty_text: String) -> String:
+	if items.is_empty():
+		return empty_text
+
+	var parts: PackedStringArray = PackedStringArray()
+	for item: String in items:
+		parts.append(item)
+	return "；".join(parts)
+
+
+func _to_string_array(value: Variant) -> Array[String]:
+	var result: Array[String] = []
+	if typeof(value) != TYPE_ARRAY:
+		return result
+
+	var raw_items: Array = value as Array
+	for item_value: Variant in raw_items:
+		result.append(str(item_value))
+	return result
+
+
+func _min_int(left: int, right: int) -> int:
+	if left < right:
+		return left
+	return right

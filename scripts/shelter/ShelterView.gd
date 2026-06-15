@@ -10,6 +10,7 @@ const RESOURCE_NAMES: Dictionary = {
 	"hope": "希望值"
 }
 const COLLECT_COOLDOWN_SECONDS: float = 10.0
+const NIGHT_SETTLEMENT_POPUP_SCRIPT: Script = preload("res://scripts/ui/NightSettlementPopup.gd")
 const COLLECT_BUILDINGS: Array[Dictionary] = [
 	{
 		"title": "伐木棚",
@@ -397,4 +398,17 @@ func _on_world_map_pressed() -> void:
 
 func _on_end_day_pressed() -> void:
 	print("[ShelterView] button=end_day")
-	SceneRouter.go_to_result()
+	var result: Dictionary = NightSettlementManager.settle_night()
+	_refresh_hud()
+	_show_night_settlement_popup(result)
+
+
+func _show_night_settlement_popup(result: Dictionary) -> void:
+	var popup: CanvasLayer = NIGHT_SETTLEMENT_POPUP_SCRIPT.new() as CanvasLayer
+	if popup == null:
+		push_error("[ShelterView] failed to create night settlement popup")
+		return
+
+	add_child(popup)
+	if popup.has_method("show_result"):
+		popup.call("show_result", result)

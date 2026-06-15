@@ -91,11 +91,15 @@ func set_resource(resource_id: String, amount: int, source: String) -> void:
 
 
 func add_resource(resource_id: String, amount: int, source: String) -> void:
+	add_resource_with_refresh(resource_id, amount, source, true)
+
+
+func add_resource_with_refresh(resource_id: String, amount: int, source: String, refresh_temperature: bool) -> void:
 	var before: int = get_resource_amount(resource_id)
 	var after: int = _clamp_resource(resource_id, before + amount)
 	resources[resource_id] = after
 	print("[GameState] add_resource source=%s resource=%s amount=%d before=%d after=%d" % [source, resource_id, amount, before, after])
-	if resource_id == "coal":
+	if refresh_temperature and resource_id == "coal":
 		refresh_temperature_score("resource_changed:%s" % resource_id)
 	resources_changed.emit()
 	state_changed.emit()
@@ -107,6 +111,46 @@ func set_furnace_level(level: int, source: String) -> void:
 	furnace_level = int(clamp(level, DEFAULT_FURNACE_LEVEL, max_level))
 	print("[GameState] set_furnace_level source=%s before=%d after=%d" % [source, before, furnace_level])
 	refresh_temperature_score("furnace_level_changed")
+	state_changed.emit()
+
+
+func transfer_population(from_state: String, to_state: String, amount: int, source: String) -> int:
+	var before_from: int = int(population.get(from_state, 0))
+	var before_to: int = int(population.get(to_state, 0))
+	var actual_amount: int = min(max(amount, 0), before_from)
+	if actual_amount <= 0:
+		print("[GameState] transfer_population source=%s from=%s to=%s requested=%d actual=0 before_from=%d before_to=%d" % [
+			source,
+			from_state,
+			to_state,
+			amount,
+			before_from,
+			before_to
+		])
+		return 0
+
+	population[from_state] = before_from - actual_amount
+	population[to_state] = before_to + actual_amount
+	print("[GameState] transfer_population source=%s from=%s to=%s requested=%d actual=%d before_from=%d after_from=%d before_to=%d after_to=%d" % [
+		source,
+		from_state,
+		to_state,
+		amount,
+		actual_amount,
+		before_from,
+		int(population.get(from_state, 0)),
+		before_to,
+		int(population.get(to_state, 0))
+	])
+	state_changed.emit()
+	return actual_amount
+
+
+func advance_day(source: String) -> void:
+	var before: int = day
+	day += 1
+	phase = "day"
+	print("[GameState] advance_day source=%s before=%d after=%d phase=%s" % [source, before, day, phase])
 	state_changed.emit()
 
 
