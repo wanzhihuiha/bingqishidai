@@ -48,6 +48,11 @@ var collect_cards: Dictionary = {}
 var quest_title_label: Label
 var quest_progress_label: Label
 var quest_reward_label: Label
+var status_health_label: Label
+var status_sick_label: Label
+var status_morale_label: Label
+var status_hope_label: Label
+var status_text_label: Label
 var building_status_labels: Dictionary = {}
 var action_message_label: Label
 var job_total_label: Label
@@ -91,25 +96,28 @@ func _build_ui() -> void:
 
 	var content: HBoxContainer = HBoxContainer.new()
 	content.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.add_theme_constant_override("separation", 16)
 	layout.add_child(content)
 
 	var left_column: VBoxContainer = VBoxContainer.new()
 	left_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left_column.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	left_column.add_theme_constant_override("separation", 16)
 	content.add_child(left_column)
 
 	left_column.add_child(_make_hud())
-	left_column.add_child(_make_job_panel())
-	left_column.add_child(_make_center_panel())
+	left_column.add_child(_make_status_panel())
+	left_column.add_child(_make_main_scroll())
 	left_column.add_child(_make_action_bar())
 	content.add_child(_make_quest_panel())
 
 
 func _make_hud() -> GridContainer:
 	var hud: GridContainer = GridContainer.new()
-	hud.columns = 4
-	hud.add_theme_constant_override("h_separation", 12)
+	hud.columns = 6
+	hud.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hud.add_theme_constant_override("h_separation", 16)
 	hud.add_theme_constant_override("v_separation", 8)
 	day_label = _make_hud_label("")
 	hud.add_child(day_label)
@@ -141,11 +149,77 @@ func _make_hud_label(text: String) -> Label:
 	var label: Label = Label.new()
 	label.text = text
 	label.add_theme_font_size_override("font_size", 18)
+	label.custom_minimum_size = Vector2(150, 0)
 	return label
+
+
+func _make_main_scroll() -> ScrollContainer:
+	var scroll: ScrollContainer = ScrollContainer.new()
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.custom_minimum_size = Vector2(0, 0)
+
+	var row: HBoxContainer = HBoxContainer.new()
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 16)
+	scroll.add_child(row)
+
+	row.add_child(_make_job_panel())
+	row.add_child(_make_center_panel())
+	return scroll
+
+
+func _make_status_panel() -> PanelContainer:
+	var panel: PanelContainer = PanelContainer.new()
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	var box: HBoxContainer = HBoxContainer.new()
+	box.add_theme_constant_override("separation", 18)
+	panel.add_child(box)
+
+	var title: Label = Label.new()
+	title.text = "营地状态"
+	title.add_theme_font_size_override("font_size", 22)
+	title.custom_minimum_size = Vector2(110, 0)
+	box.add_child(title)
+
+	var grid: GridContainer = GridContainer.new()
+	grid.columns = 4
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid.add_theme_constant_override("h_separation", 16)
+	grid.add_theme_constant_override("v_separation", 6)
+	box.add_child(grid)
+
+	status_health_label = Label.new()
+	grid.add_child(status_health_label)
+
+	status_sick_label = Label.new()
+	grid.add_child(status_sick_label)
+
+	status_morale_label = Label.new()
+	grid.add_child(status_morale_label)
+
+	status_hope_label = Label.new()
+	grid.add_child(status_hope_label)
+
+	var divider: VSeparator = VSeparator.new()
+	box.add_child(divider)
+
+	status_text_label = Label.new()
+	status_text_label.custom_minimum_size = Vector2(240, 0)
+	status_text_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	status_text_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(status_text_label)
+
+	return panel
 
 
 func _make_job_panel() -> PanelContainer:
 	var panel: PanelContainer = PanelContainer.new()
+	panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	panel.custom_minimum_size = Vector2(460, 0)
 
 	var box: VBoxContainer = VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
@@ -222,6 +296,7 @@ func _make_job_row(job_id: String) -> HBoxContainer:
 
 func _make_center_panel() -> PanelContainer:
 	var panel: PanelContainer = PanelContainer.new()
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 
 	var grid: GridContainer = GridContainer.new()
@@ -239,7 +314,8 @@ func _make_center_panel() -> PanelContainer:
 
 func _make_furnace_card() -> PanelContainer:
 	var panel: PanelContainer = PanelContainer.new()
-	panel.custom_minimum_size = Vector2(280, 230)
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.custom_minimum_size = Vector2(260, 230)
 
 	var box: VBoxContainer = VBoxContainer.new()
 	box.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -282,6 +358,7 @@ func _make_furnace_card() -> PanelContainer:
 
 func _make_collect_card(config: Dictionary) -> PanelContainer:
 	var panel: PanelContainer = PanelContainer.new()
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.custom_minimum_size = Vector2(220, 140)
 
 	var box: VBoxContainer = VBoxContainer.new()
@@ -586,6 +663,7 @@ func _refresh_hud() -> void:
 			GameState.get_temperature_status()
 		]
 
+	_refresh_status_panel()
 	_refresh_furnace_card()
 	_refresh_job_panel()
 	_refresh_quest_panel()
@@ -669,9 +747,9 @@ func _refresh_job_panel() -> void:
 	if job_preview_labels.has("hunter"):
 		(job_preview_labels.get("hunter") as Label).text = "猎手：食物 +%d" % int(resources.get("food", 0))
 	if job_preview_labels.has("cook"):
-		(job_preview_labels.get("cook") as Label).text = "厨师：食物节省 %d，希望值最多 +%d" % [
+		(job_preview_labels.get("cook") as Label).text = "厨师：食物节省 %d，士气最多 +%d" % [
 			int(preview.get("food_saved", 0)),
-			int(preview.get("hope_bonus", 0))
+			int(preview.get("morale_bonus", 0))
 		]
 	if job_preview_labels.has("medic"):
 		(job_preview_labels.get("medic") as Label).text = "医护：治疗点 %d" % int(preview.get("heal_points", 0))
@@ -682,6 +760,19 @@ func _refresh_job_panel() -> void:
 		]
 
 
+func _refresh_status_panel() -> void:
+	if status_health_label != null:
+		status_health_label.text = "健康人口：%d" % GameState.get_healthy_population()
+	if status_sick_label != null:
+		status_sick_label.text = "病患人口：%d" % GameState.get_sick_population()
+	if status_morale_label != null:
+		status_morale_label.text = "士气：%d / 100" % GameState.morale_score
+	if status_hope_label != null:
+		status_hope_label.text = "希望值：%d / 100" % GameState.get_resource_amount("hope")
+	if status_text_label != null:
+		status_text_label.text = "当前状态：%s" % GameState.shelter_status_text
+
+
 func _get_job_note_text(job_id: String, preview: Dictionary, resources: Dictionary) -> String:
 	match job_id:
 		"worker":
@@ -689,7 +780,7 @@ func _get_job_note_text(job_id: String, preview: Dictionary, resources: Dictiona
 		"hunter":
 			return "预计 +%d 食物" % int(resources.get("food", 0))
 		"cook":
-			return "节省率 %.0f%%" % (float(preview.get("food_save_rate", 0.0)) * 100.0)
+			return "节省率 %.0f%%，士气加成" % (float(preview.get("food_save_rate", 0.0)) * 100.0)
 		"medic":
 			return "治疗点 %d" % int(preview.get("heal_points", 0))
 		"engineer":

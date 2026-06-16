@@ -2,6 +2,10 @@ extends Node
 
 const FOOD_COST_PER_PERSON: int = 1
 const COAL_COST_PER_FURNACE_LEVEL: int = 2
+const FOOD_SHORTAGE_HOPE_PENALTY: int = -5
+const FOOD_SHORTAGE_MORALE_PENALTY: int = -8
+const TEMPERATURE_DANGER_MORALE_PENALTY: int = -5
+const MEDIC_TREATMENT_MORALE_BONUS: int = 2
 
 
 func settle_night() -> Dictionary:
@@ -10,6 +14,7 @@ func settle_night() -> Dictionary:
 	var day_before: int = GameState.day
 	var alive_population: int = GameState.get_alive_population()
 	var hope_before: int = GameState.get_resource_amount("hope")
+	var morale_before: int = GameState.morale_score
 	var healthy_before: int = GameState.get_healthy_population()
 	var sick_before: int = GameState.get_sick_population()
 	var temperature_score_before: int = GameState.temperature_score
@@ -37,10 +42,15 @@ func settle_night() -> Dictionary:
 
 	var hope_delta: int = 0
 	var hope_reasons: Array[String] = []
+	var morale_reasons: Array[String] = []
 	var health_changes: Array[String] = []
 	var medical_changes: Array[String] = _to_string_array(medical_result.get("changes", []))
 	for medical_change: String in medical_changes:
 		health_changes.append(medical_change)
+	var did_treat_patient: bool = _has_medical_treatment_change(medical_changes)
+	if did_treat_patient:
+		GameState.add_morale(MEDIC_TREATMENT_MORALE_BONUS, "night_medic_treatment")
+		morale_reasons.append("医护完成治疗，士气 +%d" % MEDIC_TREATMENT_MORALE_BONUS)
 
 	if temperature_status_before == "危险":
 		var cold_sick_added: int = GameState.transfer_population("healthy", "light_wound", 1, "night_temperature_danger")
@@ -48,22 +58,23 @@ func settle_night() -> Dictionary:
 			health_changes.append("温度危险，%d 名健康幸存者转为轻伤" % cold_sick_added)
 		else:
 			health_changes.append("温度危险，但没有健康幸存者可转为轻伤")
-		hope_delta -= 5
-		hope_reasons.append("温度危险，希望值 -5")
+		GameState.add_morale(TEMPERATURE_DANGER_MORALE_PENALTY, "night_temperature_danger")
+		morale_reasons.append("温度危险，士气 %d" % TEMPERATURE_DANGER_MORALE_PENALTY)
 	elif temperature_status_before == "温暖":
-		hope_delta += 2
-		hope_reasons.append("温度温暖，希望值 +2")
+		morale_reasons.append("温度温暖，营地状态稳定")
 
 	if food_shortage > 0:
 		var food_health_change: Dictionary = _apply_food_shortage_health_drop()
 		health_changes.append(str(food_health_change.get("message", "食物不足，健康下降")))
-		hope_delta -= 8
-		hope_reasons.append("食物不足，希望值 -8")
+		GameState.add_morale(FOOD_SHORTAGE_MORALE_PENALTY, "night_food_shortage")
+		morale_reasons.append("食物不足，士气 %d" % FOOD_SHORTAGE_MORALE_PENALTY)
+		hope_delta += FOOD_SHORTAGE_HOPE_PENALTY
+		hope_reasons.append("食物不足，希望值 %d" % FOOD_SHORTAGE_HOPE_PENALTY)
 	else:
-		var cook_hope_bonus: int = JobManager.get_cook_hope_bonus(true)
-		if cook_hope_bonus > 0:
-			hope_delta += cook_hope_bonus
-			hope_reasons.append("厨房运转稳定，希望值 +%d" % cook_hope_bonus)
+		var cook_morale_bonus: int = JobManager.get_cook_morale_bonus(true)
+		if cook_morale_bonus > 0:
+			GameState.add_morale(cook_morale_bonus, "night_cook_support")
+			morale_reasons.append("厨师保障食物秩序，士气 +%d" % cook_morale_bonus)
 
 	if hope_delta != 0:
 		GameState.add_resource("hope", hope_delta, "night_settlement_hope")
@@ -71,6 +82,7 @@ func settle_night() -> Dictionary:
 	var food_after: int = GameState.get_resource_amount("food")
 	var coal_after: int = GameState.get_resource_amount("coal")
 	var hope_after: int = GameState.get_resource_amount("hope")
+	var morale_after: int = GameState.morale_score
 	var healthy_after: int = GameState.get_healthy_population()
 	var sick_after: int = GameState.get_sick_population()
 
@@ -116,6 +128,12 @@ func settle_night() -> Dictionary:
 			"delta": hope_after - hope_before,
 			"reasons": hope_reasons
 		},
+		"morale": {
+			"before": morale_before,
+			"after": morale_after,
+			"delta": morale_after - morale_before,
+			"reasons": morale_reasons
+		},
 		"jobs": {
 			"production": job_production,
 			"medical": medical_result
@@ -123,7 +141,7 @@ func settle_night() -> Dictionary:
 	}
 	result["lines"] = _build_display_lines(result)
 
-	print("[NightSettlementManager] settle_night day=%d->%d alive=%d food_base_need=%d food_saved=%d food_need=%d food_paid=%d food_shortage=%d food_before=%d food_after=%d coal_base_need=%d coal_saved=%d coal_need=%d coal_paid=%d coal_shortage=%d coal_before=%d coal_after=%d temperature_score=%d temperature_status=%s healthy=%d->%d sick=%d->%d hope=%d->%d hope_reasons=%s health_changes=%s" % [
+	print("[NightSettlementManager] settle_night day=%d->%d alive=%d food_base_need=%d food_saved=%d food_need=%d food_paid=%d food_shortage=%d food_before=%d food_after=%d coal_base_need=%d coal_saved=%d coal_need=%d coal_paid=%d coal_shortage=%d coal_before=%d coal_after=%d temperature_score=%d temperature_status=%s healthy=%d->%d sick=%d->%d morale=%d->%d hope=%d->%d morale_reasons=%s hope_reasons=%s health_changes=%s" % [
 		day_before,
 		GameState.day,
 		alive_population,
@@ -147,8 +165,11 @@ func settle_night() -> Dictionary:
 		healthy_after,
 		sick_before,
 		sick_after,
+		morale_before,
+		morale_after,
 		hope_before,
 		hope_after,
+		_join_string_array(morale_reasons, "无"),
 		_join_string_array(hope_reasons, "无"),
 		_join_string_array(health_changes, "无")
 	])
@@ -177,6 +198,13 @@ func _apply_food_shortage_health_drop() -> Dictionary:
 	}
 
 
+func _has_medical_treatment_change(changes: Array[String]) -> bool:
+	for change: String in changes:
+		if change.find("治疗") >= 0:
+			return true
+	return false
+
+
 func _build_display_lines(result: Dictionary) -> Array[String]:
 	var jobs: Dictionary = result.get("jobs", {}) as Dictionary
 	var production: Dictionary = jobs.get("production", {}) as Dictionary
@@ -186,7 +214,9 @@ func _build_display_lines(result: Dictionary) -> Array[String]:
 	var temperature: Dictionary = result.get("temperature", {}) as Dictionary
 	var health: Dictionary = result.get("health", {}) as Dictionary
 	var hope: Dictionary = result.get("hope", {}) as Dictionary
+	var morale: Dictionary = result.get("morale", {}) as Dictionary
 	var hope_reasons: Array[String] = _to_string_array(hope.get("reasons", []))
+	var morale_reasons: Array[String] = _to_string_array(morale.get("reasons", []))
 	var health_changes: Array[String] = _to_string_array(health.get("changes", []))
 
 	var lines: Array[String] = []
@@ -219,6 +249,11 @@ func _build_display_lines(result: Dictionary) -> Array[String]:
 		int(health.get("sick_after", 0))
 	])
 	lines.append("健康原因：%s" % _join_string_array(health_changes, "无变化"))
+	lines.append("士气变化：%d -> %d（%s）" % [
+		int(morale.get("before", 0)),
+		int(morale.get("after", 0)),
+		_join_string_array(morale_reasons, "无变化")
+	])
 	lines.append("希望值变化：%d -> %d（%s）" % [
 		int(hope.get("before", 0)),
 		int(hope.get("after", 0)),

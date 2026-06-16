@@ -45,7 +45,7 @@ func get_preview() -> Dictionary:
 	var food_saved: int = get_food_saved_amount(GameState.get_alive_population())
 	var heal_points: int = get_heal_points()
 	var coal_saved: int = get_coal_saved_amount()
-	var hope_bonus: int = get_cook_hope_bonus(true)
+	var morale_bonus: int = get_cook_morale_bonus(true)
 
 	return {
 		"resources": {
@@ -57,8 +57,8 @@ func get_preview() -> Dictionary:
 		"food_saved": food_saved,
 		"heal_points": heal_points,
 		"coal_saved": coal_saved,
-		"hope_bonus": hope_bonus,
-		"lines": _build_preview_lines(wood_output, food_output, parts_output, food_save_rate, food_saved, heal_points, coal_saved, hope_bonus)
+		"morale_bonus": morale_bonus,
+		"lines": _build_preview_lines(wood_output, food_output, parts_output, food_save_rate, food_saved, heal_points, coal_saved, morale_bonus)
 	}
 
 
@@ -132,12 +132,16 @@ func get_coal_saved_amount() -> int:
 	return int(floor(effective_count / 2.0))
 
 
-func get_cook_hope_bonus(food_will_be_enough: bool) -> int:
+func get_cook_morale_bonus(food_will_be_enough: bool) -> int:
 	if not food_will_be_enough:
 		return 0
-	if get_effective_worker_count(COOK_ID) <= 0.0:
+	if not is_cook_support_enough():
 		return 0
-	return 1
+	return 2
+
+
+func is_cook_support_enough() -> bool:
+	return get_effective_worker_count(COOK_ID) >= 2.0
 
 
 func _round_output(job_id: String, output_id: String) -> int:
@@ -148,13 +152,13 @@ func _round_output(job_id: String, output_id: String) -> int:
 	return int(floor(effective_count * base_amount))
 
 
-func _build_preview_lines(wood_output: int, food_output: int, parts_output: int, food_save_rate: float, food_saved: int, heal_points: int, coal_saved: int, hope_bonus: int) -> Array[String]:
+func _build_preview_lines(wood_output: int, food_output: int, parts_output: int, food_save_rate: float, food_saved: int, heal_points: int, coal_saved: int, morale_bonus: int) -> Array[String]:
 	var lines: Array[String] = []
 	lines.append("资源产出：木材 +%d，食物 +%d，零件 +%d" % [wood_output, food_output, parts_output])
-	lines.append("厨房效果：食物消耗 -%d（节省率 %.0f%%），希望值最多 +%d" % [
+	lines.append("厨房效果：食物消耗 -%d（节省率 %.0f%%），士气最多 +%d" % [
 		food_saved,
 		food_save_rate * 100.0,
-		hope_bonus
+		morale_bonus
 	])
 	lines.append("医护效果：治疗点 %d，优先重伤转轻伤" % heal_points)
 	lines.append("工程维护：煤炭消耗 -%d" % coal_saved)

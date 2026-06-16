@@ -7,6 +7,7 @@ signal quest_relevant_state_changed
 
 const DEFAULT_FURNACE_LEVEL: int = 1
 const DEFAULT_WEATHER_PRESSURE: float = 0.0
+const DEFAULT_MORALE_SCORE: int = 60
 const FIRST_SCOUT_REGION_ID: String = "a1_broken_pines"
 
 var day: int = 1
@@ -19,6 +20,9 @@ var population: Dictionary = {
 	"dead": 0
 }
 var furnace_level: int = DEFAULT_FURNACE_LEVEL
+var morale_score: int = DEFAULT_MORALE_SCORE
+var health_status: String = "healthy"
+var shelter_status_text: String = "营地维持中"
 var temperature_score: int = 0
 var weather_pressure: float = DEFAULT_WEATHER_PRESSURE
 var collected_resources: Dictionary = {}
@@ -37,6 +41,7 @@ func start_new_game() -> void:
 	resources = _build_initial_resources()
 	population = _build_initial_population()
 	furnace_level = DEFAULT_FURNACE_LEVEL
+	morale_score = DEFAULT_MORALE_SCORE
 	weather_pressure = DEFAULT_WEATHER_PRESSURE
 	collected_resources = {}
 	buildings = _build_initial_buildings()
@@ -47,17 +52,22 @@ func start_new_game() -> void:
 	quests = _build_initial_quests()
 	_update_building_unlocks_for_day("start_new_game")
 	refresh_temperature_score("start_new_game")
+	refresh_shelter_status("start_new_game")
 	is_started = true
-	print("[GameState] start_new_game day=%d phase=%s resources=%s population=%s furnace_level=%d temperature_score=%d" % [
+	print("[GameState] start_new_game day=%d phase=%s resources=%s population=%s furnace_level=%d morale=%d health_status=%s shelter_status=%s temperature_score=%d" % [
 		day,
 		phase,
 		str(resources),
 		str(population),
 		furnace_level,
+		morale_score,
+		health_status,
+		shelter_status_text,
 		temperature_score
 	])
 	state_changed.emit()
 	resources_changed.emit()
+	temperature_changed.emit()
 	quest_relevant_state_changed.emit()
 
 
@@ -162,6 +172,7 @@ func transfer_population(from_state: String, to_state: String, amount: int, sour
 		int(population.get(to_state, 0))
 	])
 	_clamp_job_assignments_to_population(source)
+	refresh_shelter_status("population_changed:%s" % source)
 	state_changed.emit()
 	return actual_amount
 
@@ -434,6 +445,7 @@ func refresh_temperature_score(source: String = "manual") -> void:
 		get_temperature_status()
 	])
 	temperature_changed.emit()
+	refresh_shelter_status("temperature_changed:%s" % source)
 
 
 func get_temperature_status() -> String:
@@ -461,6 +473,45 @@ func get_sick_population() -> int:
 
 func get_healthy_population() -> int:
 	return int(population.get("healthy", 0))
+
+
+func add_morale(amount: int, source: String) -> int:
+	var before: int = morale_score
+	morale_score = int(clamp(morale_score + amount, 0, 100))
+	var delta: int = morale_score - before
+	print("[GameState] add_morale source=%s amount=%d before=%d after=%d delta=%d" % [
+		source,
+		amount,
+		before,
+		morale_score,
+		delta
+	])
+	refresh_shelter_status("morale_changed:%s" % source)
+	state_changed.emit()
+	quest_relevant_state_changed.emit()
+	return delta
+
+
+func refresh_shelter_status(source: String = "manual") -> void:
+	var before_health_status: String = health_status
+	var before_status_text: String = shelter_status_text
+	if get_sick_population() > 0:
+		health_status = "sick"
+	else:
+		health_status = "healthy"
+
+	shelter_status_text = _build_shelter_status_text()
+	if before_health_status != health_status or before_status_text != shelter_status_text:
+		print("[GameState] refresh_shelter_status source=%s health=%s->%s status=%s->%s morale=%d sick=%d temperature=%s" % [
+			source,
+			before_health_status,
+			health_status,
+			before_status_text,
+			shelter_status_text,
+			morale_score,
+			get_sick_population(),
+			get_temperature_status()
+		])
 
 
 func _build_initial_resources() -> Dictionary:
@@ -540,6 +591,18 @@ func _build_initial_quests() -> Dictionary:
 		"completed": {},
 		"rewarded": {}
 	}
+
+
+func _build_shelter_status_text() -> String:
+	if get_temperature_status() == "危险":
+		return "寒炉供暖危险"
+	if morale_score <= 25:
+		return "营地士气低落"
+	if get_sick_population() > 0:
+		return "有人需要治疗"
+	if morale_score >= 75:
+		return "营地运转稳定"
+	return "营地维持中"
 
 
 func _update_building_unlocks_for_day(source: String) -> void:
