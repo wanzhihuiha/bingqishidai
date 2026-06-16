@@ -23,6 +23,7 @@ var temperature_score: int = 0
 var weather_pressure: float = DEFAULT_WEATHER_PRESSURE
 var collected_resources: Dictionary = {}
 var buildings: Dictionary = {}
+var job_assignments: Dictionary = {}
 var assigned_jobs_total: int = 0
 var scout_state: Dictionary = {}
 var regions: Dictionary = {}
@@ -39,6 +40,7 @@ func start_new_game() -> void:
 	weather_pressure = DEFAULT_WEATHER_PRESSURE
 	collected_resources = {}
 	buildings = _build_initial_buildings()
+	job_assignments = _build_initial_job_assignments()
 	assigned_jobs_total = 0
 	scout_state = _build_initial_scout_state()
 	regions = _build_initial_regions()
@@ -159,6 +161,7 @@ func transfer_population(from_state: String, to_state: String, amount: int, sour
 		before_to,
 		int(population.get(to_state, 0))
 	])
+	_clamp_job_assignments_to_population(source)
 	state_changed.emit()
 	return actual_amount
 
@@ -248,16 +251,74 @@ func get_building_level(building_id: String) -> int:
 	return int(state.get("current_level", 0))
 
 
+func set_job_assignment(job_id: String, amount: int, source: String) -> bool:
+	var before: int = get_job_assignment(job_id)
+	var max_assignable: int = get_assignable_population()
+	var other_assigned: int = assigned_jobs_total - before
+	var allowed_amount: int = max_assignable - other_assigned
+	var after: int = int(clamp(amount, 0, max(allowed_amount, 0)))
+	if not job_assignments.has(job_id):
+		print("[GameState] set_job_assignment failed source=%s job=%s reason=unknown_job" % [source, job_id])
+		return false
+
+	job_assignments[job_id] = after
+	_refresh_assigned_jobs_total()
+	print("[GameState] set_job_assignment source=%s job=%s before=%d requested=%d after=%d max_assignable=%d total=%d" % [
+		source,
+		job_id,
+		before,
+		amount,
+		after,
+		max_assignable,
+		assigned_jobs_total
+	])
+	quest_relevant_state_changed.emit()
+	state_changed.emit()
+	return after != before
+
+
+func add_job_assignment(job_id: String, delta: int, source: String) -> bool:
+	var before: int = get_job_assignment(job_id)
+	return set_job_assignment(job_id, before + delta, source)
+
+
+func get_job_assignment(job_id: String) -> int:
+	return int(job_assignments.get(job_id, 0))
+
+
+func get_job_assignments() -> Dictionary:
+	return job_assignments.duplicate(true)
+
+
+func get_assignable_population() -> int:
+	var healthy: int = int(population.get("healthy", 0))
+	var light_wound: int = int(population.get("light_wound", 0))
+	return healthy + light_wound
+
+
+func get_unassigned_population() -> int:
+	return max(get_assignable_population() - assigned_jobs_total, 0)
+
+
 func assign_jobs_total(amount: int, source: String) -> void:
 	var before: int = assigned_jobs_total
-	var max_assignable: int = get_healthy_population()
-	assigned_jobs_total = int(clamp(amount, 0, max_assignable))
-	print("[GameState] assign_jobs_total source=%s before=%d requested=%d after=%d max=%d" % [
+	var max_assignable: int = get_assignable_population()
+	_clear_job_assignments()
+	var remaining: int = int(clamp(amount, 0, max_assignable))
+	var job_order: Array[String] = DataLoader.get_job_order()
+	for job_id: String in job_order:
+		if remaining <= 0:
+			break
+		job_assignments[job_id] = int(job_assignments.get(job_id, 0)) + 1
+		remaining -= 1
+	_refresh_assigned_jobs_total()
+	print("[GameState] assign_jobs_total source=%s before=%d requested=%d after=%d max=%d assignments=%s" % [
 		source,
 		before,
 		amount,
 		assigned_jobs_total,
-		max_assignable
+		max_assignable,
+		str(job_assignments)
 	])
 	quest_relevant_state_changed.emit()
 	state_changed.emit()
@@ -447,6 +508,14 @@ func _build_initial_buildings() -> Dictionary:
 	return result
 
 
+func _build_initial_job_assignments() -> Dictionary:
+	var result: Dictionary = {}
+	var job_order: Array[String] = DataLoader.get_job_order()
+	for job_id: String in job_order:
+		result[job_id] = 0
+	return result
+
+
 func _build_initial_scout_state() -> Dictionary:
 	return {
 		"first_scout_team_sent": false
@@ -517,3 +586,45 @@ func _clamp_resource(resource_id: String, amount: int) -> int:
 		var max_amount: int = int(max_value)
 		result = min(result, max_amount)
 	return result
+
+
+func _clear_job_assignments() -> void:
+	for job_id_value: Variant in job_assignments.keys():
+		var job_id: String = str(job_id_value)
+		job_assignments[job_id] = 0
+
+
+func _refresh_assigned_jobs_total() -> void:
+	var total: int = 0
+	for job_id_value: Variant in job_assignments.keys():
+		var job_id: String = str(job_id_value)
+		total += int(job_assignments.get(job_id, 0))
+	assigned_jobs_total = total
+
+
+func _clamp_job_assignments_to_population(source: String) -> void:
+	var max_assignable: int = get_assignable_population()
+	_refresh_assigned_jobs_total()
+	if assigned_jobs_total <= max_assignable:
+		return
+
+	var overflow: int = assigned_jobs_total - max_assignable
+	var job_order: Array[String] = DataLoader.get_job_order()
+	for index: int in range(job_order.size() - 1, -1, -1):
+		if overflow <= 0:
+			break
+		var job_id: String = job_order[index]
+		var current: int = int(job_assignments.get(job_id, 0))
+		if current <= 0:
+			continue
+		var removed: int = min(current, overflow)
+		job_assignments[job_id] = current - removed
+		overflow -= removed
+
+	_refresh_assigned_jobs_total()
+	print("[GameState] clamp_job_assignments source=%s max_assignable=%d total=%d assignments=%s" % [
+		source,
+		max_assignable,
+		assigned_jobs_total,
+		str(job_assignments)
+	])

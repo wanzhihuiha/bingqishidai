@@ -9,21 +9,27 @@ func settle_night() -> Dictionary:
 
 	var day_before: int = GameState.day
 	var alive_population: int = GameState.get_alive_population()
-	var food_before: int = GameState.get_resource_amount("food")
-	var coal_before: int = GameState.get_resource_amount("coal")
 	var hope_before: int = GameState.get_resource_amount("hope")
 	var healthy_before: int = GameState.get_healthy_population()
 	var sick_before: int = GameState.get_sick_population()
 	var temperature_score_before: int = GameState.temperature_score
 	var temperature_status_before: String = GameState.get_temperature_status()
+	var job_production: Dictionary = JobManager.apply_job_production()
+	var medical_result: Dictionary = JobManager.apply_medical_treatment()
+	var food_before: int = GameState.get_resource_amount("food")
+	var coal_before: int = GameState.get_resource_amount("coal")
 
-	var food_need: int = alive_population * FOOD_COST_PER_PERSON
+	var base_food_need: int = alive_population * FOOD_COST_PER_PERSON
+	var food_saved: int = JobManager.get_food_saved_amount(base_food_need)
+	var food_need: int = max(base_food_need - food_saved, 0)
 	var food_paid: int = _min_int(food_before, food_need)
 	var food_shortage: int = food_need - food_paid
 	if food_paid > 0:
 		GameState.add_resource("food", -food_paid, "night_settlement_food")
 
-	var coal_need: int = GameState.furnace_level * COAL_COST_PER_FURNACE_LEVEL
+	var base_coal_need: int = GameState.furnace_level * COAL_COST_PER_FURNACE_LEVEL
+	var coal_saved: int = JobManager.get_coal_saved_amount()
+	var coal_need: int = max(base_coal_need - coal_saved, 0)
 	var coal_paid: int = _min_int(coal_before, coal_need)
 	var coal_shortage: int = coal_need - coal_paid
 	if coal_paid > 0:
@@ -32,6 +38,9 @@ func settle_night() -> Dictionary:
 	var hope_delta: int = 0
 	var hope_reasons: Array[String] = []
 	var health_changes: Array[String] = []
+	var medical_changes: Array[String] = _to_string_array(medical_result.get("changes", []))
+	for medical_change: String in medical_changes:
+		health_changes.append(medical_change)
 
 	if temperature_status_before == "危险":
 		var cold_sick_added: int = GameState.transfer_population("healthy", "light_wound", 1, "night_temperature_danger")
@@ -50,6 +59,11 @@ func settle_night() -> Dictionary:
 		health_changes.append(str(food_health_change.get("message", "食物不足，健康下降")))
 		hope_delta -= 8
 		hope_reasons.append("食物不足，希望值 -8")
+	else:
+		var cook_hope_bonus: int = JobManager.get_cook_hope_bonus(true)
+		if cook_hope_bonus > 0:
+			hope_delta += cook_hope_bonus
+			hope_reasons.append("厨房运转稳定，希望值 +%d" % cook_hope_bonus)
 
 	if hope_delta != 0:
 		GameState.add_resource("hope", hope_delta, "night_settlement_hope")
@@ -68,6 +82,8 @@ func settle_night() -> Dictionary:
 		"day_after": GameState.day,
 		"alive_population": alive_population,
 		"food": {
+			"base_need": base_food_need,
+			"saved": food_saved,
 			"need": food_need,
 			"paid": food_paid,
 			"shortage": food_shortage,
@@ -75,6 +91,8 @@ func settle_night() -> Dictionary:
 			"after": food_after
 		},
 		"coal": {
+			"base_need": base_coal_need,
+			"saved": coal_saved,
 			"need": coal_need,
 			"paid": coal_paid,
 			"shortage": coal_shortage,
@@ -97,19 +115,27 @@ func settle_night() -> Dictionary:
 			"after": hope_after,
 			"delta": hope_after - hope_before,
 			"reasons": hope_reasons
+		},
+		"jobs": {
+			"production": job_production,
+			"medical": medical_result
 		}
 	}
 	result["lines"] = _build_display_lines(result)
 
-	print("[NightSettlementManager] settle_night day=%d->%d alive=%d food_need=%d food_paid=%d food_shortage=%d food_before=%d food_after=%d coal_need=%d coal_paid=%d coal_shortage=%d coal_before=%d coal_after=%d temperature_score=%d temperature_status=%s healthy=%d->%d sick=%d->%d hope=%d->%d hope_reasons=%s health_changes=%s" % [
+	print("[NightSettlementManager] settle_night day=%d->%d alive=%d food_base_need=%d food_saved=%d food_need=%d food_paid=%d food_shortage=%d food_before=%d food_after=%d coal_base_need=%d coal_saved=%d coal_need=%d coal_paid=%d coal_shortage=%d coal_before=%d coal_after=%d temperature_score=%d temperature_status=%s healthy=%d->%d sick=%d->%d hope=%d->%d hope_reasons=%s health_changes=%s" % [
 		day_before,
 		GameState.day,
 		alive_population,
+		base_food_need,
+		food_saved,
 		food_need,
 		food_paid,
 		food_shortage,
 		food_before,
 		food_after,
+		base_coal_need,
+		coal_saved,
 		coal_need,
 		coal_paid,
 		coal_shortage,
@@ -152,6 +178,9 @@ func _apply_food_shortage_health_drop() -> Dictionary:
 
 
 func _build_display_lines(result: Dictionary) -> Array[String]:
+	var jobs: Dictionary = result.get("jobs", {}) as Dictionary
+	var production: Dictionary = jobs.get("production", {}) as Dictionary
+	var production_lines: Array[String] = _to_string_array(production.get("lines", []))
 	var food: Dictionary = result.get("food", {}) as Dictionary
 	var coal: Dictionary = result.get("coal", {}) as Dictionary
 	var temperature: Dictionary = result.get("temperature", {}) as Dictionary
@@ -161,14 +190,19 @@ func _build_display_lines(result: Dictionary) -> Array[String]:
 	var health_changes: Array[String] = _to_string_array(health.get("changes", []))
 
 	var lines: Array[String] = []
-	lines.append("食物消耗：需要 %d，消耗 %d，缺口 %d，剩余 %d" % [
+	lines.append("岗位产出：%s" % _join_string_array(production_lines, "无"))
+	lines.append("食物消耗：基础需要 %d，厨师节省 %d，实际需要 %d，已消耗 %d，缺口 %d，剩余 %d" % [
+		int(food.get("base_need", 0)),
+		int(food.get("saved", 0)),
 		int(food.get("need", 0)),
 		int(food.get("paid", 0)),
 		int(food.get("shortage", 0)),
 		int(food.get("after", 0))
 	])
-	lines.append("煤炭消耗：寒炉 %d 级，需要 %d，消耗 %d，缺口 %d，剩余 %d" % [
+	lines.append("煤炭消耗：寒炉 %d 级，基础需要 %d，工程维护节省 %d，实际需要 %d，已消耗 %d，缺口 %d，剩余 %d" % [
 		GameState.furnace_level,
+		int(coal.get("base_need", 0)),
+		int(coal.get("saved", 0)),
 		int(coal.get("need", 0)),
 		int(coal.get("paid", 0)),
 		int(coal.get("shortage", 0)),

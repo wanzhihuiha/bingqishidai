@@ -2,6 +2,7 @@ extends Node
 
 const RESOURCES_PATH: String = "res://data/resources.json"
 const SURVIVORS_PATH: String = "res://data/survivors.json"
+const JOBS_PATH: String = "res://data/jobs.json"
 const BUILDINGS_PATH: String = "res://data/buildings.json"
 const QUESTS_PATH: String = "res://data/quests.json"
 const REGIONS_PATH: String = "res://data/regions.json"
@@ -9,6 +10,8 @@ const REGIONS_PATH: String = "res://data/regions.json"
 var resource_configs: Dictionary = {}
 var resource_order: Array[String] = []
 var survivor_config: Dictionary = {}
+var job_configs: Dictionary = {}
+var job_order: Array[String] = []
 var building_configs: Dictionary = {}
 var building_order: Array[String] = []
 var quest_configs: Dictionary = {}
@@ -23,12 +26,14 @@ func _ready() -> void:
 func load_all() -> void:
 	resource_configs = _load_resource_configs()
 	survivor_config = _load_survivor_config()
+	job_configs = _load_job_configs()
 	building_configs = _load_building_configs()
 	quest_configs = _load_quest_configs()
 	region_configs = _load_region_configs()
-	print("[DataLoader] load_all resources=%d survivor_config=%s buildings=%d quests=%d" % [
+	print("[DataLoader] load_all resources=%d survivor_config=%s jobs=%d buildings=%d quests=%d" % [
 		resource_configs.size(),
 		str(not survivor_config.is_empty()),
+		job_configs.size(),
 		building_configs.size(),
 		quest_configs.size()
 	])
@@ -50,6 +55,23 @@ func get_resource_config(resource_id: String) -> Dictionary:
 func get_survivor_initial_counts() -> Dictionary:
 	var counts: Dictionary = survivor_config.get("initial_counts", {}) as Dictionary
 	return counts.duplicate(true)
+
+
+func get_wounded_output_modifier() -> float:
+	return float(survivor_config.get("wounded_output_modifier", 0.5))
+
+
+func get_job_configs() -> Dictionary:
+	return job_configs.duplicate(true)
+
+
+func get_job_order() -> Array[String]:
+	return job_order.duplicate()
+
+
+func get_job_config(job_id: String) -> Dictionary:
+	var config: Dictionary = job_configs.get(job_id, {}) as Dictionary
+	return config.duplicate(true)
 
 
 func get_building_configs() -> Dictionary:
@@ -125,6 +147,33 @@ func _load_survivor_config() -> Dictionary:
 
 	print("[DataLoader] load_survivors counts=%s" % str(counts))
 	return data
+
+
+func _load_job_configs() -> Dictionary:
+	job_order.clear()
+	var data: Dictionary = _load_json_dictionary(JOBS_PATH)
+	var items: Array = data.get("items", []) as Array
+	var result: Dictionary = {}
+
+	for item_value: Variant in items:
+		if typeof(item_value) != TYPE_DICTIONARY:
+			push_error("[DataLoader] jobs item is not dictionary")
+			continue
+
+		var item: Dictionary = item_value as Dictionary
+		var job_id: String = str(item.get("id", ""))
+		if job_id.is_empty():
+			push_error("[DataLoader] jobs item missing id")
+			continue
+		if result.has(job_id):
+			push_error("[DataLoader] duplicated job id=%s" % job_id)
+			continue
+
+		result[job_id] = item.duplicate(true)
+		job_order.append(job_id)
+
+	print("[DataLoader] load_jobs count=%d order=%s" % [result.size(), str(job_order)])
+	return result
 
 
 func _load_building_configs() -> Dictionary:

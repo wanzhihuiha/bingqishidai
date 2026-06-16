@@ -9,6 +9,7 @@ const RESOURCE_NAMES: Dictionary = {
 	"parts": "零件",
 	"hope": "希望值"
 }
+const JOB_ORDER: Array[String] = ["worker", "hunter", "cook", "medic", "engineer"]
 const COLLECT_COOLDOWN_SECONDS: float = 10.0
 const NIGHT_SETTLEMENT_POPUP_SCRIPT: Script = preload("res://scripts/ui/NightSettlementPopup.gd")
 const COLLECT_BUILDINGS: Array[Dictionary] = [
@@ -49,6 +50,10 @@ var quest_progress_label: Label
 var quest_reward_label: Label
 var building_status_labels: Dictionary = {}
 var action_message_label: Label
+var job_total_label: Label
+var job_assignable_label: Label
+var job_rows: Dictionary = {}
+var job_preview_labels: Dictionary = {}
 
 
 func _ready() -> void:
@@ -95,6 +100,7 @@ func _build_ui() -> void:
 	content.add_child(left_column)
 
 	left_column.add_child(_make_hud())
+	left_column.add_child(_make_job_panel())
 	left_column.add_child(_make_center_panel())
 	left_column.add_child(_make_action_bar())
 	content.add_child(_make_quest_panel())
@@ -136,6 +142,82 @@ func _make_hud_label(text: String) -> Label:
 	label.text = text
 	label.add_theme_font_size_override("font_size", 18)
 	return label
+
+
+func _make_job_panel() -> PanelContainer:
+	var panel: PanelContainer = PanelContainer.new()
+
+	var box: VBoxContainer = VBoxContainer.new()
+	box.add_theme_constant_override("separation", 10)
+	panel.add_child(box)
+
+	var title: Label = Label.new()
+	title.text = "岗位分配"
+	title.add_theme_font_size_override("font_size", 24)
+	box.add_child(title)
+
+	job_total_label = Label.new()
+	box.add_child(job_total_label)
+
+	job_assignable_label = Label.new()
+	job_assignable_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(job_assignable_label)
+
+	for job_id: String in JOB_ORDER:
+		box.add_child(_make_job_row(job_id))
+
+	var preview_title: Label = Label.new()
+	preview_title.text = "预计每日产出"
+	preview_title.add_theme_font_size_override("font_size", 20)
+	box.add_child(preview_title)
+
+	for job_id: String in JOB_ORDER:
+		var preview_label: Label = Label.new()
+		preview_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		box.add_child(preview_label)
+		job_preview_labels[job_id] = preview_label
+
+	return panel
+
+
+func _make_job_row(job_id: String) -> HBoxContainer:
+	var row: HBoxContainer = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+
+	var name_label: Label = Label.new()
+	name_label.custom_minimum_size = Vector2(90, 0)
+	name_label.text = JobManager.get_job_name(job_id)
+	row.add_child(name_label)
+
+	var minus_button: Button = Button.new()
+	minus_button.text = "-"
+	minus_button.custom_minimum_size = Vector2(32, 32)
+	minus_button.pressed.connect(_on_job_adjust_pressed.bind(job_id, -1))
+	row.add_child(minus_button)
+
+	var count_label: Label = Label.new()
+	count_label.custom_minimum_size = Vector2(40, 0)
+	count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	row.add_child(count_label)
+
+	var plus_button: Button = Button.new()
+	plus_button.text = "+"
+	plus_button.custom_minimum_size = Vector2(32, 32)
+	plus_button.pressed.connect(_on_job_adjust_pressed.bind(job_id, 1))
+	row.add_child(plus_button)
+
+	var note_label: Label = Label.new()
+	note_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(note_label)
+
+	job_rows[job_id] = {
+		"count": count_label,
+		"plus": plus_button,
+		"minus": minus_button,
+		"note": note_label
+	}
+	return row
 
 
 func _make_center_panel() -> PanelContainer:
@@ -366,7 +448,7 @@ func assign_three_jobs() -> void:
 	if success:
 		_show_action_message("已分配 3 名幸存者岗位", true)
 	else:
-		_show_action_message("可用健康幸存者不足 3 名", false)
+		_show_action_message("可分配人口不足 3 名", false)
 	_refresh_quest_panel()
 
 
@@ -411,7 +493,7 @@ func _make_action_bar() -> VBoxContainer:
 	buttons.add_child(kitchen_button)
 
 	var job_button: Button = Button.new()
-	job_button.text = "分配岗位"
+	job_button.text = "自动分配 3 人"
 	job_button.custom_minimum_size = Vector2(150, 42)
 	job_button.pressed.connect(_on_assign_jobs_pressed)
 	buttons.add_child(job_button)
@@ -505,6 +587,7 @@ func _refresh_hud() -> void:
 		]
 
 	_refresh_furnace_card()
+	_refresh_job_panel()
 	_refresh_quest_panel()
 
 
@@ -539,6 +622,83 @@ func _on_build_kitchen_pressed() -> void:
 func _on_assign_jobs_pressed() -> void:
 	print("[ShelterView] button=assign_jobs")
 	assign_three_jobs()
+
+
+func _on_job_adjust_pressed(job_id: String, delta: int) -> void:
+	var changed: bool = GameState.add_job_assignment(job_id, delta, "job_panel_adjust")
+	if changed:
+		_show_action_message("%s 已调整" % JobManager.get_job_name(job_id), true)
+	else:
+		_show_action_message("%s 无法继续调整" % JobManager.get_job_name(job_id), false)
+	_refresh_hud()
+
+
+func _refresh_job_panel() -> void:
+	if job_total_label != null:
+		job_total_label.text = "总人口：%d" % GameState.get_alive_population()
+	if job_assignable_label != null:
+		job_assignable_label.text = "可分配健康人口：%d；轻伤半产出人口：%d；重伤不可分配：%d；剩余可用：%d" % [
+			GameState.get_healthy_population(),
+			int(GameState.population.get("light_wound", 0)),
+			int(GameState.population.get("heavy_wound", 0)),
+			GameState.get_unassigned_population()
+		]
+
+	var assignments: Dictionary = GameState.get_job_assignments()
+	var preview: Dictionary = JobManager.get_preview()
+	var resources: Dictionary = preview.get("resources", {}) as Dictionary
+
+	for job_id_value: Variant in job_rows.keys():
+		var job_id: String = str(job_id_value)
+		var row_info: Dictionary = job_rows.get(job_id, {}) as Dictionary
+		var count_label: Label = row_info.get("count") as Label
+		var plus_button: Button = row_info.get("plus") as Button
+		var minus_button: Button = row_info.get("minus") as Button
+		var note_label: Label = row_info.get("note") as Label
+		if count_label == null or plus_button == null or minus_button == null or note_label == null:
+			continue
+
+		var count: int = int(assignments.get(job_id, 0))
+		count_label.text = str(count)
+		minus_button.disabled = count <= 0
+		plus_button.disabled = GameState.get_unassigned_population() <= 0
+		note_label.text = _get_job_note_text(job_id, preview, resources)
+
+	if job_preview_labels.has("worker"):
+		(job_preview_labels.get("worker") as Label).text = "工人：木材 +%d" % int(resources.get("wood", 0))
+	if job_preview_labels.has("hunter"):
+		(job_preview_labels.get("hunter") as Label).text = "猎手：食物 +%d" % int(resources.get("food", 0))
+	if job_preview_labels.has("cook"):
+		(job_preview_labels.get("cook") as Label).text = "厨师：食物节省 %d，希望值最多 +%d" % [
+			int(preview.get("food_saved", 0)),
+			int(preview.get("hope_bonus", 0))
+		]
+	if job_preview_labels.has("medic"):
+		(job_preview_labels.get("medic") as Label).text = "医护：治疗点 %d" % int(preview.get("heal_points", 0))
+	if job_preview_labels.has("engineer"):
+		(job_preview_labels.get("engineer") as Label).text = "工程师：零件 +%d，煤炭节省 %d" % [
+			int(resources.get("parts", 0)),
+			int(preview.get("coal_saved", 0))
+		]
+
+
+func _get_job_note_text(job_id: String, preview: Dictionary, resources: Dictionary) -> String:
+	match job_id:
+		"worker":
+			return "预计 +%d 木材" % int(resources.get("wood", 0))
+		"hunter":
+			return "预计 +%d 食物" % int(resources.get("food", 0))
+		"cook":
+			return "节省率 %.0f%%" % (float(preview.get("food_save_rate", 0.0)) * 100.0)
+		"medic":
+			return "治疗点 %d" % int(preview.get("heal_points", 0))
+		"engineer":
+			return "零件 +%d，煤炭 -%d" % [
+				int(resources.get("parts", 0)),
+				int(preview.get("coal_saved", 0))
+			]
+		_:
+			return "岗位效果预览"
 
 
 func _refresh_quest_panel() -> void:
