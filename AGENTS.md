@@ -28,6 +28,7 @@
 - 结构以必要为限；不为抽象、扩展或“以后可能有用”而新增层次。
 - 使用 Godot 4.x 的新语法（@onready、@export、await 等），不要使用 Godot 3.x 的旧语法。
 - Godot 4.6 GDScript 中，只有右侧类型非常明确时才使用 `:=`。从 Autoload、未显式类型变量、`Dictionary.get()`、JSON 数据、`DataManager` / `GameState` 查询结果取得值时，必须写显式类型，例如 `var quest_state: String = game_state.get_quest_state(quest_id)`、`var quest: Dictionary = data_manager.get_item("quests", quest_id)`、`var fuel_cost: int = int(entry_cost.get("fuel", 0))`，避免 F5 时脚本解析失败。
+- 后续新增或修改代码时，默认补充中文注释：方法级注释说明方法作用、请求参数和返回内容；复杂流程、状态流转、资源扣减、信号连接、数据转换等关键步骤也要补充必要中文注释，避免只翻译代码表面含义。
 
 ## 5. 项目专属规则
 
