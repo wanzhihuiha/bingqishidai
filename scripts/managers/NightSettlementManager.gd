@@ -32,7 +32,7 @@ func settle_night() -> Dictionary:
 	if food_paid > 0:
 		GameState.add_resource("food", -food_paid, "night_settlement_food")
 
-	var base_coal_need: int = GameState.furnace_level * COAL_COST_PER_FURNACE_LEVEL
+	var base_coal_need: int = _get_furnace_coal_need()
 	var coal_saved: int = JobManager.get_coal_saved_amount()
 	var coal_need: int = max(base_coal_need - coal_saved, 0)
 	var coal_paid: int = _min_int(coal_before, coal_need)
@@ -287,3 +287,10 @@ func _min_int(left: int, right: int) -> int:
 	if left < right:
 		return left
 	return right
+
+
+func _get_furnace_coal_need() -> int:
+	var configured_need: int = int(BuildingManager.get_level_production_value("furnace", "coal_cost_per_night", 0))
+	if configured_need > 0:
+		return configured_need
+	return GameState.furnace_level * COAL_COST_PER_FURNACE_LEVEL

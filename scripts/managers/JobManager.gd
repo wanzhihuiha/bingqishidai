@@ -110,9 +110,9 @@ func apply_medical_treatment() -> Dictionary:
 
 
 func get_food_save_rate() -> float:
-	var config: Dictionary = DataLoader.get_job_config(COOK_ID)
-	var output: Dictionary = config.get("base_output", {}) as Dictionary
-	var rate_per_worker: float = float(output.get("food_save_rate", 0.0))
+	if GameState.get_building_level("kitchen") <= 0:
+		return 0.0
+	var rate_per_worker: float = float(BuildingManager.get_level_production_value("kitchen", "food_save_rate", 0.0))
 	var effective_count: float = get_effective_worker_count(COOK_ID)
 	return clamp(effective_count * rate_per_worker, 0.0, 0.5)
 
@@ -123,8 +123,11 @@ func get_food_saved_amount(base_food_need: int) -> int:
 
 
 func get_heal_points() -> int:
+	if GameState.get_building_level("medical_tent") <= 0:
+		return 0
 	var effective_count: float = get_effective_worker_count(MEDIC_ID)
-	return int(floor(effective_count))
+	var heal_points_per_medic: float = float(BuildingManager.get_level_production_value("medical_tent", "heal_points_per_medic", 1.0))
+	return int(floor(effective_count * heal_points_per_medic))
 
 
 func get_coal_saved_amount() -> int:
@@ -141,6 +144,8 @@ func get_cook_morale_bonus(food_will_be_enough: bool) -> int:
 
 
 func is_cook_support_enough() -> bool:
+	if GameState.get_building_level("kitchen") <= 0:
+		return false
 	return get_effective_worker_count(COOK_ID) >= 2.0
 
 
@@ -148,6 +153,19 @@ func _round_output(job_id: String, output_id: String) -> int:
 	var config: Dictionary = DataLoader.get_job_config(job_id)
 	var output: Dictionary = config.get("base_output", {}) as Dictionary
 	var base_amount: float = float(output.get(output_id, 0))
+	match job_id:
+		WORKER_ID:
+			if GameState.get_building_level("lumber_yard") <= 0:
+				return 0
+			base_amount = float(BuildingManager.get_level_production_value("lumber_yard", "wood_per_worker", base_amount))
+		HUNTER_ID:
+			if GameState.get_building_level("hunter_lodge") <= 0:
+				return 0
+			base_amount = float(BuildingManager.get_level_production_value("hunter_lodge", "food_per_hunter", base_amount))
+		ENGINEER_ID:
+			if GameState.get_building_level("workshop") <= 0:
+				return 0
+			base_amount = float(BuildingManager.get_level_production_value("workshop", "parts_per_engineer", base_amount))
 	var effective_count: float = get_effective_worker_count(job_id)
 	return int(floor(effective_count * base_amount))
 

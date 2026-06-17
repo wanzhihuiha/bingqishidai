@@ -9,6 +9,7 @@ const DEFAULT_FURNACE_LEVEL: int = 1
 const DEFAULT_WEATHER_PRESSURE: float = 0.0
 const DEFAULT_MORALE_SCORE: int = 60
 const FIRST_SCOUT_REGION_ID: String = "a1_broken_pines"
+const INITIAL_BUILT_BUILDINGS: Array[String] = ["furnace", "lumber_yard", "hunter_lodge"]
 
 var day: int = 1
 var phase: String = "day"
@@ -32,6 +33,7 @@ var assigned_jobs_total: int = 0
 var scout_state: Dictionary = {}
 var regions: Dictionary = {}
 var quests: Dictionary = {}
+var daily_flags: Dictionary = {}
 var is_started: bool = false
 
 
@@ -50,6 +52,7 @@ func start_new_game() -> void:
 	scout_state = _build_initial_scout_state()
 	regions = _build_initial_regions()
 	quests = _build_initial_quests()
+	daily_flags = _build_initial_daily_flags()
 	_update_building_unlocks_for_day("start_new_game")
 	refresh_temperature_score("start_new_game")
 	refresh_shelter_status("start_new_game")
@@ -181,6 +184,7 @@ func advance_day(source: String) -> void:
 	var before: int = day
 	day += 1
 	phase = "day"
+	_reset_daily_flags(source)
 	print("[GameState] advance_day source=%s before=%d after=%d phase=%s" % [source, before, day, phase])
 	_update_building_unlocks_for_day(source)
 	state_changed.emit()
@@ -204,18 +208,14 @@ func was_resource_collected(resource_id: String) -> bool:
 
 
 func build_building(building_id: String, source: String) -> bool:
-	var state: Dictionary = buildings.get(building_id, {}) as Dictionary
-	if state.is_empty():
-		state = {
-			"is_unlocked": false,
-			"is_built": false,
-			"current_level": 0
-		}
+	var state: Dictionary = _get_or_create_building_state(building_id)
 	var was_built: bool = bool(state.get("is_built", false))
 	state["is_unlocked"] = true
 	state["is_built"] = true
 	state["current_level"] = max(1, int(state.get("current_level", 0)))
 	buildings[building_id] = state
+	if building_id == "furnace":
+		set_furnace_level(int(state.get("current_level", DEFAULT_FURNACE_LEVEL)), source)
 	print("[GameState] build_building source=%s building=%s before_built=%s after_built=true" % [
 		source,
 		building_id,
@@ -227,13 +227,7 @@ func build_building(building_id: String, source: String) -> bool:
 
 
 func unlock_building(building_id: String, source: String) -> bool:
-	var state: Dictionary = buildings.get(building_id, {}) as Dictionary
-	if state.is_empty():
-		state = {
-			"is_unlocked": false,
-			"is_built": false,
-			"current_level": 0
-		}
+	var state: Dictionary = _get_or_create_building_state(building_id)
 	var was_unlocked: bool = bool(state.get("is_unlocked", false))
 	state["is_unlocked"] = true
 	buildings[building_id] = state
@@ -260,6 +254,44 @@ func is_building_unlocked(building_id: String) -> bool:
 func get_building_level(building_id: String) -> int:
 	var state: Dictionary = buildings.get(building_id, {}) as Dictionary
 	return int(state.get("current_level", 0))
+
+
+func set_building_level(building_id: String, level: int, source: String) -> bool:
+	var state: Dictionary = _get_or_create_building_state(building_id)
+	var before_level: int = int(state.get("current_level", 0))
+	var config: Dictionary = DataLoader.get_building_config(building_id)
+	var max_level: int = int(config.get("max_level", 1))
+	var after_level: int = int(clamp(level, 0, max_level))
+	state["current_level"] = after_level
+	state["is_built"] = after_level > 0
+	if after_level > 0:
+		state["is_unlocked"] = true
+	buildings[building_id] = state
+	if building_id == "furnace":
+		set_furnace_level(after_level, source)
+	print("[GameState] set_building_level source=%s building=%s before=%d after=%d" % [
+		source,
+		building_id,
+		before_level,
+		after_level
+	])
+	quest_relevant_state_changed.emit()
+	state_changed.emit()
+	return before_level != after_level
+
+
+func was_building_upgraded_today() -> bool:
+	return bool(daily_flags.get("building_upgraded", false))
+
+
+func mark_building_upgraded(source: String) -> void:
+	var before: bool = was_building_upgraded_today()
+	daily_flags["building_upgraded"] = true
+	print("[GameState] mark_building_upgraded source=%s before=%s after=true" % [
+		source,
+		str(before)
+	])
+	state_changed.emit()
 
 
 func set_job_assignment(job_id: String, amount: int, source: String) -> bool:
@@ -547,8 +579,8 @@ func _build_initial_buildings() -> Dictionary:
 		var is_initial: bool = unlock_day <= day
 		var current_level: int = 0
 		var is_built: bool = false
-		if building_id == "furnace":
-			current_level = DEFAULT_FURNACE_LEVEL
+		if INITIAL_BUILT_BUILDINGS.has(building_id):
+			current_level = 1
 			is_built = true
 		result[building_id] = {
 			"is_unlocked": is_initial,
@@ -591,6 +623,28 @@ func _build_initial_quests() -> Dictionary:
 		"completed": {},
 		"rewarded": {}
 	}
+
+
+func _build_initial_daily_flags() -> Dictionary:
+	return {
+		"building_upgraded": false
+	}
+
+
+func _reset_daily_flags(source: String) -> void:
+	daily_flags = _build_initial_daily_flags()
+	print("[GameState] reset_daily_flags source=%s flags=%s" % [source, str(daily_flags)])
+
+
+func _get_or_create_building_state(building_id: String) -> Dictionary:
+	var state: Dictionary = buildings.get(building_id, {}) as Dictionary
+	if state.is_empty():
+		state = {
+			"is_unlocked": false,
+			"is_built": false,
+			"current_level": 0
+		}
+	return state
 
 
 func _build_shelter_status_text() -> String:

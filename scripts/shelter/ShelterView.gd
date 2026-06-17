@@ -12,6 +12,7 @@ const RESOURCE_NAMES: Dictionary = {
 const JOB_ORDER: Array[String] = ["worker", "hunter", "cook", "medic", "engineer"]
 const COLLECT_COOLDOWN_SECONDS: float = 10.0
 const NIGHT_SETTLEMENT_POPUP_SCRIPT: Script = preload("res://scripts/ui/NightSettlementPopup.gd")
+const BUILDING_PANEL_SCRIPT: Script = preload("res://scripts/shelter/BuildingPanel.gd")
 const COLLECT_BUILDINGS: Array[Dictionary] = [
 	{
 		"title": "伐木棚",
@@ -39,11 +40,7 @@ var population_label: Label
 var healthy_label: Label
 var sick_label: Label
 var temperature_label: Label
-var furnace_level_label: Label
-var furnace_temperature_label: Label
-var furnace_cost_label: Label
-var furnace_message_label: Label
-var furnace_upgrade_button: Button
+var building_panel: Control
 var collect_cards: Dictionary = {}
 var quest_title_label: Label
 var quest_progress_label: Label
@@ -55,6 +52,8 @@ var status_hope_label: Label
 var status_text_label: Label
 var building_status_labels: Dictionary = {}
 var action_message_label: Label
+var squad_button: Button
+var end_day_confirm_dialog: ConfirmationDialog
 var job_total_label: Label
 var job_assignable_label: Label
 var job_rows: Dictionary = {}
@@ -111,6 +110,7 @@ func _build_ui() -> void:
 	left_column.add_child(_make_main_scroll())
 	left_column.add_child(_make_action_bar())
 	content.add_child(_make_quest_panel())
+	_create_end_day_confirm_dialog()
 
 
 func _make_hud() -> GridContainer:
@@ -299,59 +299,30 @@ func _make_center_panel() -> PanelContainer:
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 
-	var grid: GridContainer = GridContainer.new()
-	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 16)
-	grid.add_theme_constant_override("v_separation", 16)
-	panel.add_child(grid)
-
-	grid.add_child(_make_furnace_card())
-	for config_value: Dictionary in COLLECT_BUILDINGS:
-		grid.add_child(_make_collect_card(config_value))
-
-	return panel
-
-
-func _make_furnace_card() -> PanelContainer:
-	var panel: PanelContainer = PanelContainer.new()
-	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	panel.custom_minimum_size = Vector2(260, 230)
-
 	var box: VBoxContainer = VBoxContainer.new()
-	box.alignment = BoxContainer.ALIGNMENT_CENTER
-	box.add_theme_constant_override("separation", 8)
+	box.add_theme_constant_override("separation", 12)
 	panel.add_child(box)
 
-	var title: Label = Label.new()
-	title.text = "寒炉"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 24)
-	box.add_child(title)
+	building_panel = BUILDING_PANEL_SCRIPT.new() as Control
+	if building_panel != null:
+		building_panel.custom_minimum_size = Vector2(0, 360)
+		if building_panel.has_signal("action_finished"):
+			building_panel.connect("action_finished", _on_building_action_finished)
+		box.add_child(building_panel)
 
-	furnace_level_label = Label.new()
-	furnace_level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(furnace_level_label)
+	var collect_title: Label = Label.new()
+	collect_title.text = "资源收取"
+	collect_title.add_theme_font_size_override("font_size", 22)
+	box.add_child(collect_title)
 
-	furnace_temperature_label = Label.new()
-	furnace_temperature_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(furnace_temperature_label)
+	var grid: GridContainer = GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("v_separation", 12)
+	box.add_child(grid)
 
-	furnace_cost_label = Label.new()
-	furnace_cost_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	furnace_cost_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	box.add_child(furnace_cost_label)
-
-	furnace_message_label = Label.new()
-	furnace_message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	furnace_message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	furnace_message_label.add_theme_font_size_override("font_size", 16)
-	box.add_child(furnace_message_label)
-
-	furnace_upgrade_button = Button.new()
-	furnace_upgrade_button.text = "升级寒炉"
-	furnace_upgrade_button.custom_minimum_size = Vector2(130, 36)
-	furnace_upgrade_button.pressed.connect(_on_furnace_upgrade_pressed)
-	box.add_child(furnace_upgrade_button)
+	for config_value: Dictionary in COLLECT_BUILDINGS:
+		grid.add_child(_make_collect_card(config_value))
 
 	return panel
 
@@ -433,31 +404,6 @@ func _refresh_collect_card(resource_id: String) -> void:
 		status.text = "可收取"
 
 
-func _refresh_furnace_card() -> void:
-	if furnace_level_label == null:
-		return
-
-	var max_level: int = BuildingManager.get_furnace_max_level()
-	var current_level: int = GameState.furnace_level
-	furnace_level_label.text = "等级：%d / %d" % [current_level, max_level]
-
-	if furnace_temperature_label != null:
-		furnace_temperature_label.text = "温度评分：%d（%s）" % [
-			GameState.temperature_score,
-			GameState.get_temperature_status()
-		]
-
-	if furnace_cost_label != null:
-		furnace_cost_label.text = "升级所需：%s" % BuildingManager.get_furnace_upgrade_cost_text()
-
-	if furnace_upgrade_button != null:
-		furnace_upgrade_button.disabled = current_level >= max_level
-		if current_level >= max_level:
-			furnace_upgrade_button.text = "已满级"
-		else:
-			furnace_upgrade_button.text = "升级寒炉"
-
-
 func _on_collect_pressed(resource_id: String, amount: int) -> void:
 	var card: Dictionary = collect_cards.get(resource_id, {}) as Dictionary
 	var cooldown_left: float = float(card.get("cooldown_left", 0.0))
@@ -496,28 +442,6 @@ func _play_collect_feedback(resource_id: String, amount: int) -> void:
 	tween.chain().tween_callback(feedback_label.queue_free)
 
 
-func _on_furnace_upgrade_pressed() -> void:
-	var result: Dictionary = BuildingManager.upgrade_furnace()
-	var message: String = str(result.get("message", ""))
-	var success: bool = bool(result.get("success", false))
-	if furnace_message_label != null:
-		furnace_message_label.text = message
-		if success:
-			furnace_message_label.add_theme_color_override("font_color", Color(0.25, 0.75, 0.35, 1.0))
-		else:
-			furnace_message_label.add_theme_color_override("font_color", Color(1.0, 0.25, 0.18, 1.0))
-	_play_furnace_upgrade_feedback(success)
-	_refresh_hud()
-
-
-func build_kitchen() -> void:
-	var result: Dictionary = BuildingManager.build_building("kitchen")
-	var message: String = str(result.get("message", ""))
-	var success: bool = bool(result.get("success", false))
-	_show_action_message(message, success)
-	_refresh_hud()
-
-
 func assign_three_jobs() -> void:
 	GameState.assign_jobs_total(3, "assign_three_jobs")
 	var assigned: int = GameState.assigned_jobs_total
@@ -527,19 +451,6 @@ func assign_three_jobs() -> void:
 	else:
 		_show_action_message("可分配人口不足 3 名", false)
 	_refresh_quest_panel()
-
-
-func _play_furnace_upgrade_feedback(success: bool) -> void:
-	if furnace_upgrade_button == null:
-		return
-
-	var target_color: Color = Color(0.45, 1.0, 0.65, 1.0)
-	if not success:
-		target_color = Color(1.0, 0.55, 0.45, 1.0)
-
-	var tween: Tween = create_tween()
-	tween.tween_property(furnace_upgrade_button, "modulate", target_color, 0.1)
-	tween.tween_property(furnace_upgrade_button, "modulate", Color.WHITE, 0.2)
 
 
 func _make_action_bar() -> VBoxContainer:
@@ -557,17 +468,17 @@ func _make_action_bar() -> VBoxContainer:
 	world_button.pressed.connect(_on_world_map_pressed)
 	buttons.add_child(world_button)
 
+	squad_button = Button.new()
+	squad_button.text = "英雄小队"
+	squad_button.custom_minimum_size = Vector2(170, 42)
+	squad_button.pressed.connect(_on_squad_pressed)
+	buttons.add_child(squad_button)
+
 	var end_day_button: Button = Button.new()
 	end_day_button.text = "结束一天"
 	end_day_button.custom_minimum_size = Vector2(150, 42)
 	end_day_button.pressed.connect(_on_end_day_pressed)
 	buttons.add_child(end_day_button)
-
-	var kitchen_button: Button = Button.new()
-	kitchen_button.text = "建造厨房"
-	kitchen_button.custom_minimum_size = Vector2(150, 42)
-	kitchen_button.pressed.connect(_on_build_kitchen_pressed)
-	buttons.add_child(kitchen_button)
 
 	var job_button: Button = Button.new()
 	job_button.text = "自动分配 3 人"
@@ -582,6 +493,24 @@ func _make_action_bar() -> VBoxContainer:
 	actions.add_child(action_message_label)
 
 	return actions
+
+
+func _create_end_day_confirm_dialog() -> void:
+	if end_day_confirm_dialog != null:
+		return
+	end_day_confirm_dialog = ConfirmationDialog.new()
+	end_day_confirm_dialog.title = "确认结束一天"
+	end_day_confirm_dialog.dialog_text = "结束一天后会进入夜晚结算。\n是否继续？"
+	end_day_confirm_dialog.confirmed.connect(_on_end_day_confirmed)
+	add_child(end_day_confirm_dialog)
+
+	var ok_button: Button = end_day_confirm_dialog.get_ok_button()
+	if ok_button != null:
+		ok_button.text = "确认结束"
+
+	var cancel_button: Button = end_day_confirm_dialog.get_cancel_button()
+	if cancel_button != null:
+		cancel_button.text = "取消"
 
 
 func _make_quest_panel() -> PanelContainer:
@@ -664,7 +593,9 @@ func _refresh_hud() -> void:
 		]
 
 	_refresh_status_panel()
-	_refresh_furnace_card()
+	if building_panel != null and building_panel.has_method("refresh"):
+		building_panel.call("refresh")
+	_refresh_feature_buttons()
 	_refresh_job_panel()
 	_refresh_quest_panel()
 
@@ -676,9 +607,42 @@ func _on_world_map_pressed() -> void:
 
 func _on_end_day_pressed() -> void:
 	print("[ShelterView] button=end_day")
+	if end_day_confirm_dialog == null:
+		_create_end_day_confirm_dialog()
+	end_day_confirm_dialog.dialog_text = "结束一天后会进入夜晚结算，并推进到第 %d 天。\n是否继续？" % (GameState.day + 1)
+	end_day_confirm_dialog.popup_centered()
+
+
+func _on_end_day_confirmed() -> void:
+	print("[ShelterView] confirm=end_day")
 	var result: Dictionary = NightSettlementManager.settle_night()
 	_refresh_hud()
 	_show_night_settlement_popup(result)
+
+
+func _on_squad_pressed() -> void:
+	print("[ShelterView] button=hero_squad")
+	if not BuildingManager.can_show_feature_unlocked("hero_squad"):
+		_show_action_message("训练场 1 级解锁英雄小队入口", false)
+		return
+	_show_action_message("英雄小队入口已解锁，正式编队功能将在后续章节接入。", true)
+
+
+func _refresh_feature_buttons() -> void:
+	if squad_button == null:
+		return
+
+	if BuildingManager.can_show_feature_unlocked("hero_squad"):
+		squad_button.text = "英雄小队"
+		squad_button.tooltip_text = "英雄小队入口已解锁"
+	else:
+		squad_button.text = "英雄小队"
+		squad_button.tooltip_text = "训练场 1 级解锁"
+
+
+func _on_building_action_finished(message: String, success: bool) -> void:
+	_show_action_message(message, success)
+	_refresh_hud()
 
 
 func _show_night_settlement_popup(result: Dictionary) -> void:
@@ -690,11 +654,6 @@ func _show_night_settlement_popup(result: Dictionary) -> void:
 	add_child(popup)
 	if popup.has_method("show_result"):
 		popup.call("show_result", result)
-
-
-func _on_build_kitchen_pressed() -> void:
-	print("[ShelterView] button=build_kitchen")
-	build_kitchen()
 
 
 func _on_assign_jobs_pressed() -> void:
@@ -828,8 +787,12 @@ func _refresh_building_status_panel() -> void:
 
 		if is_built:
 			status_text = "已建造，等级 %d" % level
+			if building_id == "training_ground" and BuildingManager.can_show_feature_unlocked("hero_squad"):
+				status_text += "，英雄小队入口已解锁"
+			if building_id == "outpost" and BuildingManager.can_show_feature_unlocked("map_outpost"):
+				status_text += "，建前哨能力已解锁"
 		elif is_unlocked:
-			status_text = "已解锁"
+			status_text = "已解锁，可建造"
 		else:
 			status_text = "未解锁，第 %d 天开放" % unlock_day
 

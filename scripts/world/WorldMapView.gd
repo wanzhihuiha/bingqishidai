@@ -118,30 +118,103 @@ func _on_region_pressed(region: Dictionary) -> void:
 func _describe_region(region: Dictionary) -> String:
 	var code: String = str(region.get("code", "--"))
 	var name_text: String = str(region.get("name", "未知区域"))
-	var owner: String = str(region.get("initial_owner", "unknown"))
+	var owner: String = _get_owner_name(str(region.get("initial_owner", "unknown")))
 	var danger: int = int(region.get("initial_danger_level", 0))
 	var resources: Array = region.get("resource_ids", []) as Array
+	var special_target: String = str(region.get("special_target", ""))
 	var neighbors: Array = region.get("neighbors", []) as Array
+	var can_build_outpost: bool = bool(region.get("can_build_outpost", false))
 
-	return "区域详情占位\n\n编号：%s\n名称：%s\n初始归属：%s\n危险度：%d\n资源：%s\n相邻区域：%s" % [
+	return "区域详情\n\n编号：%s\n名称：%s\n归属：%s\n危险度：%s\n资源：%s\n特殊目标：%s\n可建前哨：%s\n相邻区域：%s" % [
 		code,
 		name_text,
 		owner,
-		danger,
-		_join_values(resources),
-		_join_values(neighbors)
+		_get_danger_text(danger),
+		_join_resource_names(resources),
+		_get_special_target_name(special_target),
+		_get_yes_no_text(can_build_outpost),
+		_join_region_names(neighbors)
 	]
 
 
-func _join_values(values: Array) -> String:
+func _join_resource_names(values: Array) -> String:
 	if values.is_empty():
 		return "无"
 
 	var parts: PackedStringArray = PackedStringArray()
 	for value: Variant in values:
-		parts.append(str(value))
+		var resource_id: String = str(value)
+		parts.append(GameState.get_resource_name(resource_id))
 
 	return "、".join(parts)
+
+
+func _join_region_names(values: Array) -> String:
+	if values.is_empty():
+		return "无"
+
+	var parts: PackedStringArray = PackedStringArray()
+	for value: Variant in values:
+		var region_id: String = str(value)
+		var config: Dictionary = DataLoader.get_region_config(region_id)
+		var code: String = str(config.get("code", ""))
+		var region_name: String = str(config.get("name", region_id))
+		if code.is_empty():
+			parts.append(region_name)
+		else:
+			parts.append("%s %s" % [code, region_name])
+
+	return "、".join(parts)
+
+
+func _get_owner_name(owner_id: String) -> String:
+	match owner_id:
+		"player":
+			return "我方控制"
+		"neutral":
+			return "中立"
+		"enemy":
+			return "敌方控制"
+		"contested":
+			return "争夺中"
+		_:
+			return "未知"
+
+
+func _get_danger_text(danger: int) -> String:
+	match danger:
+		0:
+			return "0（安全）"
+		1:
+			return "1（低）"
+		2:
+			return "2（中低）"
+		3:
+			return "3（中）"
+		4:
+			return "4（高）"
+		5:
+			return "5（极高）"
+		_:
+			return "%d（未知）" % danger
+
+
+func _get_special_target_name(target_id: String) -> String:
+	match target_id:
+		"intel":
+			return "情报"
+		"beacon":
+			return "边境信标"
+		"", "<null>":
+			return "无"
+		_:
+			return "无"
+
+
+func _get_yes_no_text(value: bool) -> String:
+	if value:
+		return "可以"
+	return "不可以"
 
 
 func _on_back_pressed() -> void:
