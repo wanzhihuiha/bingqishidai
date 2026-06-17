@@ -1,5 +1,7 @@
 extends CanvasLayer
 
+signal continued
+
 var panel: PanelContainer
 var title_label: Label
 var content_box: VBoxContainer
@@ -7,12 +9,18 @@ var continue_button: Button
 var ui_built: bool = false
 
 
+# 作用：Godot 自动回调；配置弹窗层级并确保 UI 已创建。
+# 参数：无。
+# 返回：无。
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	layer = 10
 	_ensure_ui_built()
 
 
+# 作用：展示夜晚结算结果。
+# 参数：result 是 NightSettlementManager.settle_night() 返回的结算 Dictionary。
+# 返回：无。会刷新标题和内容列表。
 func show_result(result: Dictionary) -> void:
 	_ensure_ui_built()
 
@@ -45,6 +53,9 @@ func show_result(result: Dictionary) -> void:
 	content_box.add_child(summary)
 
 
+# 作用：动态创建夜晚结算弹窗 UI。
+# 参数：无。
+# 返回：无。会创建遮罩、面板、标题、内容容器和继续按钮。
 func _build_ui() -> void:
 	var dim: ColorRect = ColorRect.new()
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -92,6 +103,9 @@ func _build_ui() -> void:
 	ui_built = true
 
 
+# 作用：清空弹窗内容区。
+# 参数：无。
+# 返回：无。旧内容节点会排队释放。
 func _clear_content() -> void:
 	if content_box == null:
 		return
@@ -100,11 +114,18 @@ func _clear_content() -> void:
 		child.queue_free()
 
 
+# 作用：响应“继续”按钮。
+# 参数：无。
+# 返回：无。会发出 continued 信号并关闭弹窗。
 func _on_continue_pressed() -> void:
 	print("[NightSettlementPopup] button=continue")
+	continued.emit()
 	queue_free()
 
 
+# 作用：把 Variant 安全转换成字符串数组。
+# 参数：value 是任意值，通常来自结算结果 Dictionary。
+# 返回：字符串数组；value 不是数组时返回空数组。
 func _to_string_array(value: Variant) -> Array[String]:
 	var result: Array[String] = []
 	if typeof(value) != TYPE_ARRAY:
@@ -116,6 +137,9 @@ func _to_string_array(value: Variant) -> Array[String]:
 	return result
 
 
+# 作用：确保弹窗 UI 已经创建。
+# 参数：无。
+# 返回：无。已经创建过时不会重复创建。
 func _ensure_ui_built() -> void:
 	if ui_built:
 		return

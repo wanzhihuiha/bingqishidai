@@ -2,90 +2,333 @@
   "schema_version": 1,
   "items": [
     {
-      "id": "storm_warning_small",
-      "type": "storm",
-      "title": "小型暴风雪预警",
-      "body": "哨塔方向传来风声，明天可能出现小型暴风雪。",
-      "trigger": {
-        "min_day": 5,
-        "max_day": 6
-      },
-      "choices": [
-        {
-          "id": "store_coal",
-          "label": "提前储煤",
-          "effects": [
-            {
-              "effect_type": "resource_delta",
-              "target_id": "coal",
-              "value": -3,
-              "note": "提前分配煤炭到寒炉旁。"
-            }
-          ],
-          "result_text": "营地把煤炭集中到寒炉附近，准备迎接低温。"
-        },
-        {
-          "id": "keep_working",
-          "label": "维持生产",
-          "effects": [],
-          "result_text": "营地维持今日计划，但明天需要留意煤炭消耗。"
-        }
-      ],
-      "weight": 10,
-      "once_only": false,
-      "cooldown_days": 3,
-      "unique_key": "storm_warning"
-    },
-    {
-      "id": "refugees_at_gate",
+      "id": "refugee_help_early",
       "type": "refugee",
-      "title": "雪夜求助者",
-      "body": "几名幸存者抵达营地外，请求进入避难所。",
+      "title": "难民求援",
+      "body": "几名冻僵的求助者停在营门外。他们说身后还有孩子，但营地的食物也不宽裕。",
       "trigger": {
-        "min_day": 3,
-        "max_day": 20,
-        "min_resources": {
-          "food": 8
-        }
+        "min_day": 2,
+        "max_day": 8
       },
       "choices": [
         {
-          "id": "offer_food",
-          "label": "提供食物",
+          "id": "accept",
+          "label": "接纳他们",
+          "conditions": {
+            "min_resources": {
+              "food": 8
+            }
+          },
           "effects": [
             {
               "effect_type": "resource_delta",
               "target_id": "food",
-              "value": -6,
-              "note": "接纳求助者消耗食物。"
+              "value": -8,
+              "note": "接纳求助者需要分出食物。"
+            },
+            {
+              "effect_type": "state_change",
+              "target_id": "population.healthy",
+              "value": 1,
+              "note": "一名幸存者加入营地。"
             },
             {
               "effect_type": "resource_delta",
               "target_id": "hope",
-              "value": 5,
-              "note": "成功救助提升希望值。"
+              "value": 3,
+              "note": "营地因为救助他人而更有希望。"
             }
           ],
-          "result_text": "求助者被安置下来，营地士气有所提升。"
+          "result_text": "求助者被带到寒炉旁，营地多了一双能干活的手。"
         },
         {
-          "id": "turn_away",
-          "label": "暂不接纳",
+          "id": "give_food",
+          "label": "给少量食物",
+          "conditions": {
+            "min_resources": {
+              "food": 4
+            }
+          },
+          "effects": [
+            {
+              "effect_type": "resource_delta",
+              "target_id": "food",
+              "value": -4,
+              "note": "分出一小包食物。"
+            },
+            {
+              "effect_type": "resource_delta",
+              "target_id": "hope",
+              "value": 1,
+              "note": "至少没有让他们空手离开。"
+            }
+          ],
+          "result_text": "守卫把食物交给他们，求助者向营地深深鞠了一躬。"
+        },
+        {
+          "id": "refuse",
+          "label": "拒绝",
           "effects": [
             {
               "effect_type": "resource_delta",
               "target_id": "hope",
-              "value": -3,
-              "note": "拒绝救助降低希望值。"
+              "value": -2,
+              "note": "拒绝救援让营地气氛沉重。"
+            },
+            {
+              "effect_type": "state_change",
+              "target_id": "morale_score",
+              "value": -2,
+              "note": "守卫和幸存者都不好受。"
             }
           ],
-          "result_text": "守卫关闭了营门，营地气氛变得沉重。"
+          "result_text": "营门关上后，寒风里只剩下脚步远去的声音。"
+        }
+      ],
+      "weight": 8,
+      "once_only": false,
+      "cooldown_days": 4,
+      "unique_key": "refugee_help"
+    },
+    {
+      "id": "furnace_fault_early",
+      "type": "disease",
+      "title": "寒炉故障",
+      "body": "寒炉外壳传来刺耳的摩擦声，热浪忽高忽低。继续拖延会让营地明显变冷。",
+      "trigger": {
+        "min_day": 2,
+        "max_day": 8
+      },
+      "choices": [
+        {
+          "id": "repair_with_parts",
+          "label": "消耗零件维修",
+          "conditions": {
+            "min_resources": {
+              "parts": 2
+            }
+          },
+          "effects": [
+            {
+              "effect_type": "resource_delta",
+              "target_id": "parts",
+              "value": -2,
+              "note": "用零件更换磨损结构。"
+            },
+            {
+              "effect_type": "state_change",
+              "target_id": "temperature_score",
+              "value": 4,
+              "note": "寒炉恢复稳定。"
+            },
+            {
+              "effect_type": "resource_delta",
+              "target_id": "hope",
+              "value": 1,
+              "note": "设备稳定让大家安心。"
+            }
+          ],
+          "result_text": "新的零件卡进炉体，寒炉的轰鸣声重新变得稳定。"
+        },
+        {
+          "id": "lower_heat",
+          "label": "临时降温",
+          "effects": [
+            {
+              "effect_type": "state_change",
+              "target_id": "temperature_score",
+              "value": -6,
+              "note": "降低输出换取短暂稳定。"
+            },
+            {
+              "effect_type": "state_change",
+              "target_id": "morale_score",
+              "value": -3,
+              "note": "降温让大家更加焦躁。"
+            },
+            {
+              "effect_type": "resource_delta",
+              "target_id": "hope",
+              "value": -1,
+              "note": "寒冷削弱希望。"
+            }
+          ],
+          "result_text": "寒炉被压低输出，营地里的人把衣领又裹紧了一层。"
+        },
+        {
+          "id": "engineer_repair",
+          "label": "让工程师抢修",
+          "conditions": {
+            "min_resources": {
+              "coal": 2
+            },
+            "required_job_assignments": {
+              "engineer": 1
+            }
+          },
+          "effects": [
+            {
+              "effect_type": "resource_delta",
+              "target_id": "coal",
+              "value": -2,
+              "note": "抢修时额外烧掉一批煤炭。"
+            },
+            {
+              "effect_type": "state_change",
+              "target_id": "temperature_score",
+              "value": 2,
+              "note": "工程师临时稳住了寒炉。"
+            },
+            {
+              "effect_type": "resource_delta",
+              "target_id": "hope",
+              "value": 1,
+              "note": "有人站出来解决问题。"
+            }
+          ],
+          "result_text": "工程师顶着热浪钻到炉旁，硬是把故障压了下去。"
+        }
+      ],
+      "weight": 7,
+      "once_only": false,
+      "cooldown_days": 4,
+      "unique_key": "furnace_fault"
+    },
+    {
+      "id": "child_fever_early",
+      "type": "disease",
+      "title": "孩子发烧",
+      "body": "一名孩子整夜高烧，家属守在医务帐外。药品不多，但拖下去可能会更糟。",
+      "trigger": {
+        "min_day": 3,
+        "max_day": 8
+      },
+      "choices": [
+        {
+          "id": "use_medicine",
+          "label": "消耗药品治疗",
+          "conditions": {
+            "min_resources": {
+              "medicine": 2
+            }
+          },
+          "effects": [
+            {
+              "effect_type": "resource_delta",
+              "target_id": "medicine",
+              "value": -2,
+              "note": "使用药品控制高烧。"
+            },
+            {
+              "effect_type": "resource_delta",
+              "target_id": "hope",
+              "value": 2,
+              "note": "及时治疗稳定人心。"
+            }
+          ],
+          "result_text": "药品起了作用，孩子的呼吸慢慢平稳下来。"
+        },
+        {
+          "id": "medic_overtime",
+          "label": "医护加班",
+          "conditions": {
+            "required_building_levels": {
+              "medical_tent": 1
+            },
+            "required_job_assignments": {
+              "medic": 1
+            }
+          },
+          "effects": [
+            {
+              "effect_type": "state_change",
+              "target_id": "morale_score",
+              "value": -2,
+              "note": "医护疲惫影响士气。"
+            },
+            {
+              "effect_type": "resource_delta",
+              "target_id": "hope",
+              "value": 1,
+              "note": "有人守住了病床。"
+            }
+          ],
+          "result_text": "医护守到天亮，孩子的体温终于降了下来。"
+        },
+        {
+          "id": "observe",
+          "label": "暂时观察",
+          "effects": [
+            {
+              "effect_type": "resource_delta",
+              "target_id": "hope",
+              "value": -1,
+              "note": "拖延治疗让大家担心。"
+            },
+            {
+              "effect_type": "state_change",
+              "target_id": "population.transfer",
+              "value": {
+                "from_state": "healthy",
+                "to_state": "light_wound",
+                "amount": 1
+              },
+              "note": "病情拖延造成轻伤。"
+            }
+          ],
+          "result_text": "孩子的烧没有立刻退下，营地里多了一名需要照看的病患。"
+        }
+      ],
+      "weight": 7,
+      "once_only": false,
+      "cooldown_days": 4,
+      "unique_key": "fever"
+    },
+    {
+      "id": "wild_footprints_early",
+      "type": "resource_discovery",
+      "title": "野外脚印",
+      "body": "猎屋附近发现了一串新鲜脚印。它可能通向猎物，也可能通向危险。",
+      "trigger": {
+        "min_day": 2,
+        "max_day": 8
+      },
+      "choices": [
+        {
+          "id": "send_hunter",
+          "label": "派猎手查看",
+          "conditions": {
+            "required_job_assignments": {
+              "hunter": 1
+            }
+          },
+          "effects": [
+            {
+              "effect_type": "resource_delta",
+              "target_id": "food",
+              "value": 5,
+              "note": "猎手找回一小批食物。"
+            },
+            {
+              "effect_type": "resource_delta",
+              "target_id": "hope",
+              "value": 1,
+              "note": "营地看到了野外机会。"
+            }
+          ],
+          "result_text": "猎手沿着脚印追出去，带回了几块冻肉。"
+        },
+        {
+          "id": "avoid_risk",
+          "label": "不冒险",
+          "effects": [],
+          "result_text": "营地没有派人外出。脚印很快被风雪盖住。"
         }
       ],
       "weight": 6,
       "once_only": false,
-      "cooldown_days": 5,
-      "unique_key": "refugee_help"
+      "cooldown_days": 3,
+      "unique_key": "wild_footprints"
     }
   ]
 }

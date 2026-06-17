@@ -3,11 +3,17 @@ extends Control
 var detail_label: Label
 
 
+# 作用：Godot 自动回调；地图场景加载完成后构建地图界面。
+# 参数：无。
+# 返回：无。
 func _ready() -> void:
 	print("[WorldMapView] ready")
 	_build_ui()
 
 
+# 作用：动态创建冰原地图页面。
+# 参数：无。
+# 返回：无。包含区域按钮网格、详情面板和底部操作栏。
 func _build_ui() -> void:
 	var root: MarginContainer = MarginContainer.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -36,6 +42,9 @@ func _build_ui() -> void:
 	layout.add_child(_make_action_bar())
 
 
+# 作用：创建区域按钮网格。
+# 参数：无。
+# 返回：GridContainer，每个区域会生成一个按钮。
 func _make_region_grid() -> GridContainer:
 	var regions: Array = _load_regions()
 	var grid: GridContainer = GridContainer.new()
@@ -60,6 +69,9 @@ func _make_region_grid() -> GridContainer:
 	return grid
 
 
+# 作用：创建右侧区域详情面板。
+# 参数：无。
+# 返回：PanelContainer，内部包含 detail_label。
 func _make_detail_panel() -> PanelContainer:
 	var panel: PanelContainer = PanelContainer.new()
 	panel.custom_minimum_size = Vector2(300, 320)
@@ -74,6 +86,9 @@ func _make_detail_panel() -> PanelContainer:
 	return panel
 
 
+# 作用：创建地图页面底部操作栏。
+# 参数：无。
+# 返回：HBoxContainer，包含返回避难所、派侦察队和侦察断松林按钮。
 func _make_action_bar() -> HBoxContainer:
 	var actions: HBoxContainer = HBoxContainer.new()
 	actions.alignment = BoxContainer.ALIGNMENT_END
@@ -99,6 +114,9 @@ func _make_action_bar() -> HBoxContainer:
 	return actions
 
 
+# 作用：加载所有区域配置并整理成数组。
+# 参数：无。
+# 返回：区域配置数组；每个元素是区域配置 Dictionary 的副本。
 func _load_regions() -> Array:
 	var configs: Dictionary = DataLoader.get_region_configs()
 	var regions: Array = []
@@ -109,12 +127,18 @@ func _load_regions() -> Array:
 	return regions
 
 
+# 作用：响应区域按钮点击，更新右侧详情文本。
+# 参数：region 是被点击区域的配置 Dictionary。
+# 返回：无。
 func _on_region_pressed(region: Dictionary) -> void:
 	var region_id: String = str(region.get("id", "unknown"))
 	print("[WorldMapView] button=region id=%s" % region_id)
 	detail_label.text = _describe_region(region)
 
 
+# 作用：把区域配置转换成多行详情文本。
+# 参数：region 是区域配置 Dictionary。
+# 返回：中文区域详情文本。
 func _describe_region(region: Dictionary) -> String:
 	var code: String = str(region.get("code", "--"))
 	var name_text: String = str(region.get("name", "未知区域"))
@@ -137,6 +161,9 @@ func _describe_region(region: Dictionary) -> String:
 	]
 
 
+# 作用：把资源 id 数组转换成资源中文名文本。
+# 参数：values 是资源 id 数组。
+# 返回：用顿号连接的资源名称；数组为空时返回“无”。
 func _join_resource_names(values: Array) -> String:
 	if values.is_empty():
 		return "无"
@@ -149,6 +176,9 @@ func _join_resource_names(values: Array) -> String:
 	return "、".join(parts)
 
 
+# 作用：把区域 id 数组转换成区域中文名文本。
+# 参数：values 是区域 id 数组。
+# 返回：用顿号连接的区域名称；数组为空时返回“无”。
 func _join_region_names(values: Array) -> String:
 	if values.is_empty():
 		return "无"
@@ -167,6 +197,9 @@ func _join_region_names(values: Array) -> String:
 	return "、".join(parts)
 
 
+# 作用：把区域归属 id 转换成中文名。
+# 参数：owner_id 是归属 id，例如 player、neutral、enemy。
+# 返回：中文归属名；未知时返回“未知”。
 func _get_owner_name(owner_id: String) -> String:
 	match owner_id:
 		"player":
@@ -181,6 +214,9 @@ func _get_owner_name(owner_id: String) -> String:
 			return "未知"
 
 
+# 作用：把危险度数字转换成中文说明。
+# 参数：danger 是危险度整数。
+# 返回：危险度文本，例如“4（高）”。
 func _get_danger_text(danger: int) -> String:
 	match danger:
 		0:
@@ -199,6 +235,9 @@ func _get_danger_text(danger: int) -> String:
 			return "%d（未知）" % danger
 
 
+# 作用：把特殊目标 id 转换成中文名。
+# 参数：target_id 是特殊目标 id，例如 intel、beacon。
+# 返回：中文目标名；没有特殊目标时返回“无”。
 func _get_special_target_name(target_id: String) -> String:
 	match target_id:
 		"intel":
@@ -211,22 +250,34 @@ func _get_special_target_name(target_id: String) -> String:
 			return "无"
 
 
+# 作用：把布尔值转换成中文“可以/不可以”。
+# 参数：value 是布尔值。
+# 返回：true 返回“可以”，false 返回“不可以”。
 func _get_yes_no_text(value: bool) -> String:
 	if value:
 		return "可以"
 	return "不可以"
 
 
+# 作用：响应“返回避难所”按钮。
+# 参数：无。
+# 返回：无。会切换回避难所场景。
 func _on_back_pressed() -> void:
 	print("[WorldMapView] button=back_to_shelter")
 	SceneRouter.go_to_shelter()
 
 
+# 作用：响应“派出侦察队”按钮。
+# 参数：无。
+# 返回：无。会标记第一支侦察队已派出，用于前期引导目标。
 func _on_send_scout_pressed() -> void:
 	print("[WorldMapView] button=send_scout_team")
 	GameState.send_first_scout_team("world_map_send_scout_team")
 
 
+# 作用：响应“侦察断松林”按钮。
+# 参数：无。
+# 返回：无。会标记第一个教学区域已侦察。
 func _on_scout_first_region_pressed() -> void:
 	print("[WorldMapView] button=scout_first_region")
 	GameState.scout_region("a1_broken_pines", "world_map_scout_first_region")

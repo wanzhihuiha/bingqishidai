@@ -3,11 +3,17 @@ extends Control
 const GAME_TITLE: String = "冰汽时代"
 
 
+# 作用：Godot 自动回调；主菜单场景加载完成后构建界面。
+# 参数：无。
+# 返回：无。
 func _ready() -> void:
 	print("[MainMenu] ready")
 	_build_ui()
 
 
+# 作用：动态创建主菜单界面，包括标题、开始、继续、设置和退出按钮。
+# 参数：无。
+# 返回：无。创建出的节点会直接添加到当前 Control 下。
 func _build_ui() -> void:
 	var root: MarginContainer = MarginContainer.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -45,6 +51,9 @@ func _build_ui() -> void:
 	layout.add_child(exit_button)
 
 
+# 作用：创建统一尺寸的主菜单按钮。
+# 参数：text 是按钮显示文案。
+# 返回：配置好文本和最小尺寸的 Button。
 func _make_menu_button(text: String) -> Button:
 	var button: Button = Button.new()
 	button.text = text
@@ -52,16 +61,25 @@ func _make_menu_button(text: String) -> Button:
 	return button
 
 
+# 作用：响应“开始新游戏”按钮。
+# 参数：无。
+# 返回：无。会重置游戏状态并进入避难所界面。
 func _on_start_new_game_pressed() -> void:
 	print("[MainMenu] button=start_new_game")
 	GameState.start_new_game()
 	SceneRouter.go_to_shelter()
 
 
+# 作用：响应“设置”按钮。
+# 参数：无。
+# 返回：无。当前只是占位日志，后续可接入设置界面。
 func _on_settings_pressed() -> void:
 	print("[MainMenu] button=settings placeholder")
 
 
+# 作用：响应“退出”按钮。
+# 参数：无。
+# 返回：无。会请求 Godot 关闭游戏窗口。
 func _on_exit_pressed() -> void:
 	print("[MainMenu] button=exit")
 	get_tree().quit()

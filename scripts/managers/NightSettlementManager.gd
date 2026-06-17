@@ -8,9 +8,13 @@ const TEMPERATURE_DANGER_MORALE_PENALTY: int = -5
 const MEDIC_TREATMENT_MORALE_BONUS: int = 2
 
 
+# 作用：执行一次夜晚结算，处理岗位产出、食物/煤炭消耗、温度伤病、士气希望变化，并推进到下一天。
+# 参数：无。
+# 返回：结算结果 Dictionary，包含食物、煤炭、温度、健康、希望、士气、岗位产出和展示行。
 func settle_night() -> Dictionary:
 	GameState.ensure_started()
 
+	# 先记录结算前快照，后面用于生成“变化前 -> 变化后”的弹窗文本。
 	var day_before: int = GameState.day
 	var alive_population: int = GameState.get_alive_population()
 	var hope_before: int = GameState.get_resource_amount("hope")
@@ -24,6 +28,7 @@ func settle_night() -> Dictionary:
 	var food_before: int = GameState.get_resource_amount("food")
 	var coal_before: int = GameState.get_resource_amount("coal")
 
+	# 食物需求由存活人口决定，厨师会先抵扣一部分需求。
 	var base_food_need: int = alive_population * FOOD_COST_PER_PERSON
 	var food_saved: int = JobManager.get_food_saved_amount(base_food_need)
 	var food_need: int = max(base_food_need - food_saved, 0)
@@ -32,6 +37,7 @@ func settle_night() -> Dictionary:
 	if food_paid > 0:
 		GameState.add_resource("food", -food_paid, "night_settlement_food")
 
+	# 煤炭需求由寒炉等级或建筑配置决定，工程师维护会降低一部分煤炭消耗。
 	var base_coal_need: int = _get_furnace_coal_need()
 	var coal_saved: int = JobManager.get_coal_saved_amount()
 	var coal_need: int = max(base_coal_need - coal_saved, 0)
@@ -52,6 +58,7 @@ func settle_night() -> Dictionary:
 		GameState.add_morale(MEDIC_TREATMENT_MORALE_BONUS, "night_medic_treatment")
 		morale_reasons.append("医护完成治疗，士气 +%d" % MEDIC_TREATMENT_MORALE_BONUS)
 
+	# 温度危险会造成伤病和士气下降；温度温暖暂时只作为正向说明，不额外加数值。
 	if temperature_status_before == "危险":
 		var cold_sick_added: int = GameState.transfer_population("healthy", "light_wound", 1, "night_temperature_danger")
 		if cold_sick_added > 0:
@@ -63,6 +70,7 @@ func settle_night() -> Dictionary:
 	elif temperature_status_before == "温暖":
 		morale_reasons.append("温度温暖，营地状态稳定")
 
+	# 食物不足是夜晚最重要的负面压力，会同时影响健康、士气和希望值。
 	if food_shortage > 0:
 		var food_health_change: Dictionary = _apply_food_shortage_health_drop()
 		health_changes.append(str(food_health_change.get("message", "食物不足，健康下降")))
@@ -79,6 +87,7 @@ func settle_night() -> Dictionary:
 	if hope_delta != 0:
 		GameState.add_resource("hope", hope_delta, "night_settlement_hope")
 
+	# 所有数值写入后，再取一次结算后快照。
 	var food_after: int = GameState.get_resource_amount("food")
 	var coal_after: int = GameState.get_resource_amount("coal")
 	var hope_after: int = GameState.get_resource_amount("hope")
@@ -89,6 +98,7 @@ func settle_night() -> Dictionary:
 	GameState.advance_day("night_settlement")
 	GameState.refresh_temperature_score("night_settlement_next_day")
 
+	# 统一返回结构化结果，弹窗只负责展示，不再重新计算结算规则。
 	var result: Dictionary = {
 		"day_before": day_before,
 		"day_after": GameState.day,
@@ -177,6 +187,9 @@ func settle_night() -> Dictionary:
 	return result
 
 
+# 作用：处理食物不足导致的健康恶化。
+# 参数：无。
+# 返回：Dictionary，包含 amount 实际变化人数和 message 展示文本。
 func _apply_food_shortage_health_drop() -> Dictionary:
 	var healthy_to_light: int = GameState.transfer_population("healthy", "light_wound", 1, "night_food_shortage")
 	if healthy_to_light > 0:
@@ -198,6 +211,9 @@ func _apply_food_shortage_health_drop() -> Dictionary:
 	}
 
 
+# 作用：判断医护结果中是否真的发生了治疗。
+# 参数：changes 是治疗结果文本数组。
+# 返回：包含“治疗”字样时返回 true，否则返回 false。
 func _has_medical_treatment_change(changes: Array[String]) -> bool:
 	for change: String in changes:
 		if change.find("治疗") >= 0:
@@ -205,6 +221,9 @@ func _has_medical_treatment_change(changes: Array[String]) -> bool:
 	return false
 
 
+# 作用：把结构化夜晚结算结果转换成弹窗展示行。
+# 参数：result 是 settle_night() 生成的结算结果 Dictionary。
+# 返回：中文展示行数组。
 func _build_display_lines(result: Dictionary) -> Array[String]:
 	var jobs: Dictionary = result.get("jobs", {}) as Dictionary
 	var production: Dictionary = jobs.get("production", {}) as Dictionary
@@ -262,6 +281,9 @@ func _build_display_lines(result: Dictionary) -> Array[String]:
 	return lines
 
 
+# 作用：拼接字符串数组。
+# 参数：items 是字符串数组；empty_text 是数组为空时显示的文本。
+# 返回：用分号连接后的字符串。
 func _join_string_array(items: Array[String], empty_text: String) -> String:
 	if items.is_empty():
 		return empty_text
@@ -272,6 +294,9 @@ func _join_string_array(items: Array[String], empty_text: String) -> String:
 	return "；".join(parts)
 
 
+# 作用：把 Variant 安全转换成字符串数组。
+# 参数：value 是任意值，通常来自 Dictionary.get()。
+# 返回：如果 value 是数组，逐项转成字符串；否则返回空数组。
 func _to_string_array(value: Variant) -> Array[String]:
 	var result: Array[String] = []
 	if typeof(value) != TYPE_ARRAY:
@@ -283,12 +308,18 @@ func _to_string_array(value: Variant) -> Array[String]:
 	return result
 
 
+# 作用：返回两个整数中的较小值。
+# 参数：left 和 right 是待比较整数。
+# 返回：较小的整数。
 func _min_int(left: int, right: int) -> int:
 	if left < right:
 		return left
 	return right
 
 
+# 作用：计算寒炉夜晚基础煤炭需求。
+# 参数：无。
+# 返回：优先读取当前寒炉等级配置中的 coal_cost_per_night；缺失时按寒炉等级乘以默认消耗计算。
 func _get_furnace_coal_need() -> int:
 	var configured_need: int = int(BuildingManager.get_level_production_value("furnace", "coal_cost_per_night", 0))
 	if configured_need > 0:

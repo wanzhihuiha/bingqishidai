@@ -12,6 +12,7 @@ const RESOURCE_NAMES: Dictionary = {
 const JOB_ORDER: Array[String] = ["worker", "hunter", "cook", "medic", "engineer"]
 const COLLECT_COOLDOWN_SECONDS: float = 10.0
 const NIGHT_SETTLEMENT_POPUP_SCRIPT: Script = preload("res://scripts/ui/NightSettlementPopup.gd")
+const EVENT_POPUP_SCRIPT: Script = preload("res://scripts/ui/EventPopup.gd")
 const BUILDING_PANEL_SCRIPT: Script = preload("res://scripts/shelter/BuildingPanel.gd")
 const COLLECT_BUILDINGS: Array[Dictionary] = [
 	{
@@ -54,12 +55,16 @@ var building_status_labels: Dictionary = {}
 var action_message_label: Label
 var squad_button: Button
 var end_day_confirm_dialog: ConfirmationDialog
+var report_labels: Array[Label] = []
 var job_total_label: Label
 var job_assignable_label: Label
 var job_rows: Dictionary = {}
 var job_preview_labels: Dictionary = {}
 
 
+# 作用：Godot 自动回调；避难所场景加载完成后初始化游戏、连接信号、构建 UI 并刷新显示。
+# 参数：无。
+# 返回：无。
 func _ready() -> void:
 	print("[ShelterView] ready")
 	set_process(true)
@@ -76,10 +81,16 @@ func _ready() -> void:
 	_refresh_hud()
 
 
+# 作用：Godot 每帧回调；用于推进资源收取按钮的冷却倒计时。
+# 参数：delta 是距离上一帧经过的秒数。
+# 返回：无。
 func _process(delta: float) -> void:
 	_update_collect_cooldowns(delta)
 
 
+# 作用：动态创建避难所主界面。
+# 参数：无。
+# 返回：无。会创建资源栏、状态面板、岗位/建筑/收取区域、操作栏和目标面板。
 func _build_ui() -> void:
 	var root: MarginContainer = MarginContainer.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -113,6 +124,9 @@ func _build_ui() -> void:
 	_create_end_day_confirm_dialog()
 
 
+# 作用：创建顶部 HUD 资源和状态栏。
+# 参数：无。
+# 返回：GridContainer，包含天数、资源、人口和温度标签。
 func _make_hud() -> GridContainer:
 	var hud: GridContainer = GridContainer.new()
 	hud.columns = 6
@@ -145,6 +159,9 @@ func _make_hud() -> GridContainer:
 	return hud
 
 
+# 作用：创建 HUD 中使用的统一文本标签。
+# 参数：text 是初始显示文本。
+# 返回：配置好字号和最小宽度的 Label。
 func _make_hud_label(text: String) -> Label:
 	var label: Label = Label.new()
 	label.text = text
@@ -153,6 +170,9 @@ func _make_hud_label(text: String) -> Label:
 	return label
 
 
+# 作用：创建中部可滚动主内容区域。
+# 参数：无。
+# 返回：ScrollContainer，内部放置岗位面板和中心建筑/资源面板。
 func _make_main_scroll() -> ScrollContainer:
 	var scroll: ScrollContainer = ScrollContainer.new()
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -170,6 +190,9 @@ func _make_main_scroll() -> ScrollContainer:
 	return scroll
 
 
+# 作用：创建营地状态面板。
+# 参数：无。
+# 返回：PanelContainer，展示健康、病患、士气、希望值和综合状态文本。
 func _make_status_panel() -> PanelContainer:
 	var panel: PanelContainer = PanelContainer.new()
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -215,6 +238,9 @@ func _make_status_panel() -> PanelContainer:
 	return panel
 
 
+# 作用：创建岗位分配面板。
+# 参数：无。
+# 返回：PanelContainer，包含岗位人数调整按钮和预计每日产出。
 func _make_job_panel() -> PanelContainer:
 	var panel: PanelContainer = PanelContainer.new()
 	panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
@@ -254,6 +280,9 @@ func _make_job_panel() -> PanelContainer:
 	return panel
 
 
+# 作用：创建单个岗位调整行。
+# 参数：job_id 是岗位 id。
+# 返回：HBoxContainer，包含岗位名、加减按钮、人数和效果说明。
 func _make_job_row(job_id: String) -> HBoxContainer:
 	var row: HBoxContainer = HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
@@ -294,6 +323,9 @@ func _make_job_row(job_id: String) -> HBoxContainer:
 	return row
 
 
+# 作用：创建中间建筑管理和资源收取区域。
+# 参数：无。
+# 返回：PanelContainer，内部包含 BuildingPanel 和资源收取卡片。
 func _make_center_panel() -> PanelContainer:
 	var panel: PanelContainer = PanelContainer.new()
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -327,6 +359,9 @@ func _make_center_panel() -> PanelContainer:
 	return panel
 
 
+# 作用：创建单个资源收取卡片。
+# 参数：config 是资源点配置 Dictionary，包含 title、body、resource_id、amount。
+# 返回：PanelContainer，包含资源点文本、状态和收取按钮。
 func _make_collect_card(config: Dictionary) -> PanelContainer:
 	var panel: PanelContainer = PanelContainer.new()
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -370,6 +405,9 @@ func _make_collect_card(config: Dictionary) -> PanelContainer:
 	return panel
 
 
+# 作用：推进所有资源收取卡片的冷却时间。
+# 参数：delta 是距离上一帧经过的秒数。
+# 返回：无。冷却变化后会刷新对应卡片按钮状态。
 func _update_collect_cooldowns(delta: float) -> void:
 	for resource_id_value: Variant in collect_cards.keys():
 		var resource_id: String = str(resource_id_value)
@@ -384,6 +422,9 @@ func _update_collect_cooldowns(delta: float) -> void:
 		_refresh_collect_card(resource_id)
 
 
+# 作用：刷新单个资源收取卡片的按钮和状态文本。
+# 参数：resource_id 是资源 id。
+# 返回：无。
 func _refresh_collect_card(resource_id: String) -> void:
 	var card: Dictionary = collect_cards.get(resource_id, {}) as Dictionary
 	var button: Button = card.get("button") as Button
@@ -404,6 +445,9 @@ func _refresh_collect_card(resource_id: String) -> void:
 		status.text = "可收取"
 
 
+# 作用：响应资源收取按钮。
+# 参数：resource_id 是资源 id；amount 是本次收取数量。
+# 返回：无。成功收取后会增加资源、标记首次收取、进入冷却并播放反馈。
 func _on_collect_pressed(resource_id: String, amount: int) -> void:
 	var card: Dictionary = collect_cards.get(resource_id, {}) as Dictionary
 	var cooldown_left: float = float(card.get("cooldown_left", 0.0))
@@ -421,6 +465,9 @@ func _on_collect_pressed(resource_id: String, amount: int) -> void:
 	_play_collect_feedback(resource_id, amount)
 
 
+# 作用：播放资源收取后的浮字和按钮闪色反馈。
+# 参数：resource_id 是资源 id；amount 是收取数量。
+# 返回：无。反馈动画结束后会自动释放浮字标签。
 func _play_collect_feedback(resource_id: String, amount: int) -> void:
 	var card: Dictionary = collect_cards.get(resource_id, {}) as Dictionary
 	var button: Button = card.get("button") as Button
@@ -442,6 +489,9 @@ func _play_collect_feedback(resource_id: String, amount: int) -> void:
 	tween.chain().tween_callback(feedback_label.queue_free)
 
 
+# 作用：自动分配 3 名幸存者到岗位，用于前期引导验证。
+# 参数：无。
+# 返回：无。会显示成功或失败提示并刷新目标面板。
 func assign_three_jobs() -> void:
 	GameState.assign_jobs_total(3, "assign_three_jobs")
 	var assigned: int = GameState.assigned_jobs_total
@@ -453,6 +503,9 @@ func assign_three_jobs() -> void:
 	_refresh_quest_panel()
 
 
+# 作用：创建底部操作栏。
+# 参数：无。
+# 返回：VBoxContainer，包含进入地图、英雄小队、结束一天、自动分配岗位和提示文本。
 func _make_action_bar() -> VBoxContainer:
 	var actions: VBoxContainer = VBoxContainer.new()
 	actions.add_theme_constant_override("separation", 8)
@@ -495,6 +548,9 @@ func _make_action_bar() -> VBoxContainer:
 	return actions
 
 
+# 作用：创建“结束一天”确认弹窗。
+# 参数：无。
+# 返回：无。已创建过时不会重复创建。
 func _create_end_day_confirm_dialog() -> void:
 	if end_day_confirm_dialog != null:
 		return
@@ -513,6 +569,9 @@ func _create_end_day_confirm_dialog() -> void:
 		cancel_button.text = "取消"
 
 
+# 作用：创建右侧当前目标和建筑状态面板。
+# 参数：无。
+# 返回：PanelContainer，展示当前任务、奖励、建筑状态和近期日志。
 func _make_quest_panel() -> PanelContainer:
 	var panel: PanelContainer = PanelContainer.new()
 	panel.custom_minimum_size = Vector2(300, 0)
@@ -557,9 +616,26 @@ func _make_quest_panel() -> PanelContainer:
 	_add_building_status_row(box, "training_ground")
 	_add_building_status_row(box, "outpost")
 
+	var report_divider: HSeparator = HSeparator.new()
+	box.add_child(report_divider)
+
+	var report_title: Label = Label.new()
+	report_title.text = "近期日志"
+	report_title.add_theme_font_size_override("font_size", 22)
+	box.add_child(report_title)
+
+	for index: int in range(5):
+		var report_label: Label = Label.new()
+		report_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		box.add_child(report_label)
+		report_labels.append(report_label)
+
 	return panel
 
 
+# 作用：在建筑状态面板中添加一行建筑状态标签。
+# 参数：container 是目标容器；building_id 是建筑 id。
+# 返回：无。创建的 Label 会记录到 building_status_labels 中。
 func _add_building_status_row(container: VBoxContainer, building_id: String) -> void:
 	var label: Label = Label.new()
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -567,10 +643,14 @@ func _add_building_status_row(container: VBoxContainer, building_id: String) -> 
 	building_status_labels[building_id] = label
 
 
+# 作用：刷新避难所界面的所有 HUD 和子面板。
+# 参数：无。
+# 返回：无。资源、人口、温度、建筑、岗位、目标和日志都会同步更新。
 func _refresh_hud() -> void:
 	if day_label != null:
 		day_label.text = "第 %d 天" % GameState.day
 
+	# 资源栏按创建时记录的 resource_labels 刷新，显示名称来自 DataLoader 配置。
 	for resource_id_value: Variant in resource_labels.keys():
 		var resource_id: String = str(resource_id_value)
 		var label: Label = resource_labels.get(resource_id) as Label
@@ -598,13 +678,20 @@ func _refresh_hud() -> void:
 	_refresh_feature_buttons()
 	_refresh_job_panel()
 	_refresh_quest_panel()
+	_refresh_report_panel()
 
 
+# 作用：响应“进入冰原地图”按钮。
+# 参数：无。
+# 返回：无。会切换到地图场景。
 func _on_world_map_pressed() -> void:
 	print("[ShelterView] button=world_map")
 	SceneRouter.go_to_world_map()
 
 
+# 作用：响应“结束一天”按钮，弹出确认窗口。
+# 参数：无。
+# 返回：无。确认后才会真正执行夜晚结算。
 func _on_end_day_pressed() -> void:
 	print("[ShelterView] button=end_day")
 	if end_day_confirm_dialog == null:
@@ -613,6 +700,9 @@ func _on_end_day_pressed() -> void:
 	end_day_confirm_dialog.popup_centered()
 
 
+# 作用：响应结束一天确认。
+# 参数：无。
+# 返回：无。会执行夜晚结算、刷新界面并显示结算弹窗。
 func _on_end_day_confirmed() -> void:
 	print("[ShelterView] confirm=end_day")
 	var result: Dictionary = NightSettlementManager.settle_night()
@@ -620,6 +710,9 @@ func _on_end_day_confirmed() -> void:
 	_show_night_settlement_popup(result)
 
 
+# 作用：响应“英雄小队”按钮。
+# 参数：无。
+# 返回：无。当前功能只做解锁提示，正式编队后续接入。
 func _on_squad_pressed() -> void:
 	print("[ShelterView] button=hero_squad")
 	if not BuildingManager.can_show_feature_unlocked("hero_squad"):
@@ -628,6 +721,9 @@ func _on_squad_pressed() -> void:
 	_show_action_message("英雄小队入口已解锁，正式编队功能将在后续章节接入。", true)
 
 
+# 作用：刷新功能入口按钮状态。
+# 参数：无。
+# 返回：无。当前主要刷新英雄小队入口的提示文本。
 func _refresh_feature_buttons() -> void:
 	if squad_button == null:
 		return
@@ -640,11 +736,17 @@ func _refresh_feature_buttons() -> void:
 		squad_button.tooltip_text = "训练场 1 级解锁"
 
 
+# 作用：接收建筑面板操作结果。
+# 参数：message 是建筑面板返回的提示；success 表示操作是否成功。
+# 返回：无。会显示操作提示并刷新 HUD。
 func _on_building_action_finished(message: String, success: bool) -> void:
 	_show_action_message(message, success)
 	_refresh_hud()
 
 
+# 作用：显示夜晚结算弹窗。
+# 参数：result 是 NightSettlementManager.settle_night() 返回的结算结果。
+# 返回：无。弹窗继续后会尝试触发每日事件。
 func _show_night_settlement_popup(result: Dictionary) -> void:
 	var popup: CanvasLayer = NIGHT_SETTLEMENT_POPUP_SCRIPT.new() as CanvasLayer
 	if popup == null:
@@ -652,15 +754,57 @@ func _show_night_settlement_popup(result: Dictionary) -> void:
 		return
 
 	add_child(popup)
+	if popup.has_signal("continued"):
+		popup.connect("continued", _on_night_settlement_popup_continued)
 	if popup.has_method("show_result"):
 		popup.call("show_result", result)
 
 
+# 作用：响应夜晚结算弹窗的继续信号。
+# 参数：无。
+# 返回：无。会尝试展示当天事件。
+func _on_night_settlement_popup_continued() -> void:
+	_try_show_daily_event()
+
+
+# 作用：尝试显示每日随机事件弹窗。
+# 参数：无。
+# 返回：无。没有待触发事件时直接结束。
+func _try_show_daily_event() -> void:
+	var event_config: Dictionary = EventManager.get_pending_event()
+	if event_config.is_empty():
+		return
+
+	var popup: CanvasLayer = EVENT_POPUP_SCRIPT.new() as CanvasLayer
+	if popup == null:
+		push_error("[ShelterView] failed to create event popup")
+		return
+
+	add_child(popup)
+	if popup.has_signal("event_finished"):
+		popup.connect("event_finished", _on_event_popup_finished)
+	if popup.has_method("show_event"):
+		popup.call("show_event", event_config)
+
+
+# 作用：响应事件弹窗关闭。
+# 参数：无。
+# 返回：无。会刷新 HUD，展示事件造成的状态变化。
+func _on_event_popup_finished() -> void:
+	_refresh_hud()
+
+
+# 作用：响应“自动分配 3 人”按钮。
+# 参数：无。
+# 返回：无。会调用 assign_three_jobs()。
 func _on_assign_jobs_pressed() -> void:
 	print("[ShelterView] button=assign_jobs")
 	assign_three_jobs()
 
 
+# 作用：响应岗位加减按钮。
+# 参数：job_id 是岗位 id；delta 是调整人数，通常为 +1 或 -1。
+# 返回：无。会更新 GameState、展示提示并刷新 HUD。
 func _on_job_adjust_pressed(job_id: String, delta: int) -> void:
 	var changed: bool = GameState.add_job_assignment(job_id, delta, "job_panel_adjust")
 	if changed:
@@ -670,6 +814,9 @@ func _on_job_adjust_pressed(job_id: String, delta: int) -> void:
 	_refresh_hud()
 
 
+# 作用：刷新岗位分配面板和预计产出。
+# 参数：无。
+# 返回：无。会同步岗位人数、按钮可用状态、岗位说明和预览文本。
 func _refresh_job_panel() -> void:
 	if job_total_label != null:
 		job_total_label.text = "总人口：%d" % GameState.get_alive_population()
@@ -719,6 +866,9 @@ func _refresh_job_panel() -> void:
 		]
 
 
+# 作用：刷新营地状态面板。
+# 参数：无。
+# 返回：无。会同步健康、病患、士气、希望值和综合状态文本。
 func _refresh_status_panel() -> void:
 	if status_health_label != null:
 		status_health_label.text = "健康人口：%d" % GameState.get_healthy_population()
@@ -732,6 +882,9 @@ func _refresh_status_panel() -> void:
 		status_text_label.text = "当前状态：%s" % GameState.shelter_status_text
 
 
+# 作用：生成单个岗位的效果说明文本。
+# 参数：job_id 是岗位 id；preview 是 JobManager.get_preview() 返回值；resources 是预览中的资源产出 Dictionary。
+# 返回：中文岗位说明。
 func _get_job_note_text(job_id: String, preview: Dictionary, resources: Dictionary) -> String:
 	match job_id:
 		"worker":
@@ -751,6 +904,9 @@ func _get_job_note_text(job_id: String, preview: Dictionary, resources: Dictiona
 			return "岗位效果预览"
 
 
+# 作用：刷新当前目标面板。
+# 参数：无。
+# 返回：无。会同步任务标题、进度、奖励，并刷新建筑状态面板。
 func _refresh_quest_panel() -> void:
 	if quest_title_label == null:
 		return
@@ -770,6 +926,9 @@ func _refresh_quest_panel() -> void:
 	_refresh_building_status_panel()
 
 
+# 作用：刷新右侧建筑状态列表。
+# 参数：无。
+# 返回：无。会显示建筑是否解锁、是否建造、等级和特殊功能入口。
 func _refresh_building_status_panel() -> void:
 	for building_id_value: Variant in building_status_labels.keys():
 		var building_id: String = str(building_id_value)
@@ -799,6 +958,27 @@ func _refresh_building_status_panel() -> void:
 		label.text = "%s：%s" % [building_name, status_text]
 
 
+# 作用：刷新近期日志面板。
+# 参数：无。
+# 返回：无。最多展示 report_labels 数量的日志，空位显示“暂无日志”。
+func _refresh_report_panel() -> void:
+	if report_labels.is_empty():
+		return
+
+	var reports: Array[String] = GameState.get_battle_reports()
+	for index: int in range(report_labels.size()):
+		var label: Label = report_labels[index]
+		if label == null:
+			continue
+		if index < reports.size():
+			label.text = reports[index]
+		else:
+			label.text = "暂无日志"
+
+
+# 作用：显示底部操作提示。
+# 参数：message 是提示文本；success 表示成功还是失败。
+# 返回：无。成功和失败会使用不同颜色。
 func _show_action_message(message: String, success: bool) -> void:
 	if action_message_label == null:
 		return

@@ -34,9 +34,14 @@ var scout_state: Dictionary = {}
 var regions: Dictionary = {}
 var quests: Dictionary = {}
 var daily_flags: Dictionary = {}
+var event_history: Dictionary = {}
+var battle_reports: Array[String] = []
 var is_started: bool = false
 
 
+# 作用：开始一局新游戏，重置天数、阶段、资源、人口、建筑、岗位、地图、任务和事件状态。
+# 参数：无。
+# 返回：无。执行后会发出多个状态信号，通知界面和任务系统刷新。
 func start_new_game() -> void:
 	day = 1
 	phase = "day"
@@ -53,6 +58,8 @@ func start_new_game() -> void:
 	regions = _build_initial_regions()
 	quests = _build_initial_quests()
 	daily_flags = _build_initial_daily_flags()
+	event_history = _build_initial_event_history()
+	battle_reports = []
 	_update_building_unlocks_for_day("start_new_game")
 	refresh_temperature_score("start_new_game")
 	refresh_shelter_status("start_new_game")
@@ -74,6 +81,9 @@ func start_new_game() -> void:
 	quest_relevant_state_changed.emit()
 
 
+# 作用：确保当前已经有一局游戏状态。
+# 参数：无。
+# 返回：无。未开始时会自动调用 start_new_game() 兜底。
 func ensure_started() -> void:
 	if is_started:
 		return
@@ -81,15 +91,24 @@ func ensure_started() -> void:
 	start_new_game()
 
 
+# 作用：获取指定资源当前数量。
+# 参数：resource_id 是资源 id，例如 food、coal。
+# 返回：资源数量整数；没有该资源时返回 0。
 func get_resource_amount(resource_id: String) -> int:
 	return int(resources.get(resource_id, 0))
 
 
+# 作用：获取指定资源的中文名。
+# 参数：resource_id 是资源 id。
+# 返回：资源中文名；配置缺失时返回 resource_id。
 func get_resource_name(resource_id: String) -> String:
 	var config: Dictionary = DataLoader.get_resource_config(resource_id)
 	return str(config.get("name", resource_id))
 
 
+# 作用：获取指定资源的最大容量。
+# 参数：resource_id 是资源 id。
+# 返回：最大容量；没有上限时返回 -1。
 func get_resource_max_amount(resource_id: String) -> int:
 	var config: Dictionary = DataLoader.get_resource_config(resource_id)
 	var max_value: Variant = config.get("max_amount", null)
@@ -98,6 +117,9 @@ func get_resource_max_amount(resource_id: String) -> int:
 	return int(max_value)
 
 
+# 作用：判断资源是否接近容量上限。
+# 参数：resource_id 是资源 id。
+# 返回：达到上限 80% 时返回 true；无上限资源返回 false。
 func is_resource_near_max(resource_id: String) -> bool:
 	var max_amount: int = get_resource_max_amount(resource_id)
 	if max_amount < 0:
@@ -106,10 +128,16 @@ func is_resource_near_max(resource_id: String) -> bool:
 	return current_amount >= int(float(max_amount) * 0.8)
 
 
+# 作用：获取资源显示顺序。
+# 参数：无。
+# 返回：资源 id 数组，由 DataLoader 的配置顺序决定。
 func get_resource_order() -> Array[String]:
 	return DataLoader.get_resource_order()
 
 
+# 作用：直接设置某个资源数量，并自动做上下限裁剪。
+# 参数：resource_id 是资源 id；amount 是目标数量；source 是日志来源。
+# 返回：无。执行后会发出资源和全局状态变化信号。
 func set_resource(resource_id: String, amount: int, source: String) -> void:
 	var before: int = get_resource_amount(resource_id)
 	var after: int = _clamp_resource(resource_id, amount)
@@ -121,10 +149,16 @@ func set_resource(resource_id: String, amount: int, source: String) -> void:
 	state_changed.emit()
 
 
+# 作用：给某个资源增加或减少数量。
+# 参数：resource_id 是资源 id；amount 是增量，负数表示扣除；source 是日志来源。
+# 返回：无。煤炭变化会默认刷新温度评分。
 func add_resource(resource_id: String, amount: int, source: String) -> void:
 	add_resource_with_refresh(resource_id, amount, source, true)
 
 
+# 作用：给某个资源增加或减少数量，并允许控制是否刷新温度。
+# 参数：resource_id 是资源 id；amount 是增量；source 是日志来源；refresh_temperature 表示煤炭变化后是否立即刷新温度。
+# 返回：无。执行后会发出资源和全局状态变化信号。
 func add_resource_with_refresh(resource_id: String, amount: int, source: String, refresh_temperature: bool) -> void:
 	var before: int = get_resource_amount(resource_id)
 	var after: int = _clamp_resource(resource_id, before + amount)
@@ -136,6 +170,9 @@ func add_resource_with_refresh(resource_id: String, amount: int, source: String,
 	state_changed.emit()
 
 
+# 作用：设置寒炉等级，并同步刷新温度和任务相关状态。
+# 参数：level 是目标等级；source 是日志来源。
+# 返回：无。等级会被裁剪在默认等级和配置最高等级之间。
 func set_furnace_level(level: int, source: String) -> void:
 	var before: int = furnace_level
 	var max_level: int = BuildingManager.get_furnace_max_level()
@@ -146,6 +183,9 @@ func set_furnace_level(level: int, source: String) -> void:
 	quest_relevant_state_changed.emit()
 
 
+# 作用：把幸存者从一种状态转移到另一种状态。
+# 参数：from_state 是来源状态；to_state 是目标状态；amount 是请求转移人数；source 是日志来源。
+# 返回：实际转移人数；当来源人数不足时会自动取可转移的最大值。
 func transfer_population(from_state: String, to_state: String, amount: int, source: String) -> int:
 	var before_from: int = int(population.get(from_state, 0))
 	var before_to: int = int(population.get(to_state, 0))
@@ -180,6 +220,30 @@ func transfer_population(from_state: String, to_state: String, amount: int, sour
 	return actual_amount
 
 
+# 作用：增加或减少某一幸存者状态的人数。
+# 参数：state_id 是人口状态；amount 是增量；source 是日志来源。
+# 返回：实际变化量；减少到 0 以下时会被裁剪。
+func add_population_state(state_id: String, amount: int, source: String) -> int:
+	var before: int = int(population.get(state_id, 0))
+	var after: int = max(before + amount, 0)
+	population[state_id] = after
+	print("[GameState] add_population_state source=%s state=%s amount=%d before=%d after=%d" % [
+		source,
+		state_id,
+		amount,
+		before,
+		after
+	])
+	_clamp_job_assignments_to_population(source)
+	refresh_shelter_status("population_changed:%s" % source)
+	quest_relevant_state_changed.emit()
+	state_changed.emit()
+	return after - before
+
+
+# 作用：推进到下一天，并重置每日标记和按天解锁建筑。
+# 参数：source 是日志来源。
+# 返回：无。执行后会发出状态和任务相关信号。
 func advance_day(source: String) -> void:
 	var before: int = day
 	day += 1
@@ -191,6 +255,9 @@ func advance_day(source: String) -> void:
 	quest_relevant_state_changed.emit()
 
 
+# 作用：记录某种资源已经被玩家至少收取过一次。
+# 参数：resource_id 是资源 id；source 是日志来源。
+# 返回：无。用于前期引导任务判断。
 func mark_resource_collected(resource_id: String, source: String) -> void:
 	var before: bool = bool(collected_resources.get(resource_id, false))
 	collected_resources[resource_id] = true
@@ -203,10 +270,16 @@ func mark_resource_collected(resource_id: String, source: String) -> void:
 	state_changed.emit()
 
 
+# 作用：判断某种资源是否已经完成过第一次收取。
+# 参数：resource_id 是资源 id。
+# 返回：已收取过返回 true，否则返回 false。
 func was_resource_collected(resource_id: String) -> bool:
 	return bool(collected_resources.get(resource_id, false))
 
 
+# 作用：把指定建筑标记为已建造。
+# 参数：building_id 是建筑 id；source 是日志来源。
+# 返回：如果本次从未建造变为已建造返回 true；原本已建造返回 false。
 func build_building(building_id: String, source: String) -> bool:
 	var state: Dictionary = _get_or_create_building_state(building_id)
 	var was_built: bool = bool(state.get("is_built", false))
@@ -226,6 +299,9 @@ func build_building(building_id: String, source: String) -> bool:
 	return not was_built
 
 
+# 作用：解锁指定建筑。
+# 参数：building_id 是建筑 id；source 是日志来源。
+# 返回：如果本次从未解锁变为已解锁返回 true；原本已解锁返回 false。
 func unlock_building(building_id: String, source: String) -> bool:
 	var state: Dictionary = _get_or_create_building_state(building_id)
 	var was_unlocked: bool = bool(state.get("is_unlocked", false))
@@ -241,21 +317,33 @@ func unlock_building(building_id: String, source: String) -> bool:
 	return not was_unlocked
 
 
+# 作用：判断建筑是否已经建造。
+# 参数：building_id 是建筑 id。
+# 返回：已建造返回 true，否则返回 false。
 func is_building_built(building_id: String) -> bool:
 	var state: Dictionary = buildings.get(building_id, {}) as Dictionary
 	return bool(state.get("is_built", false))
 
 
+# 作用：判断建筑是否已经解锁。
+# 参数：building_id 是建筑 id。
+# 返回：已解锁返回 true，否则返回 false。
 func is_building_unlocked(building_id: String) -> bool:
 	var state: Dictionary = buildings.get(building_id, {}) as Dictionary
 	return bool(state.get("is_unlocked", false))
 
 
+# 作用：获取建筑当前等级。
+# 参数：building_id 是建筑 id。
+# 返回：建筑等级；未建造或无状态时返回 0。
 func get_building_level(building_id: String) -> int:
 	var state: Dictionary = buildings.get(building_id, {}) as Dictionary
 	return int(state.get("current_level", 0))
 
 
+# 作用：设置建筑等级，并同步建造/解锁状态。
+# 参数：building_id 是建筑 id；level 是目标等级；source 是日志来源。
+# 返回：等级发生变化返回 true；目标等级与原等级相同返回 false。
 func set_building_level(building_id: String, level: int, source: String) -> bool:
 	var state: Dictionary = _get_or_create_building_state(building_id)
 	var before_level: int = int(state.get("current_level", 0))
@@ -280,10 +368,16 @@ func set_building_level(building_id: String, level: int, source: String) -> bool
 	return before_level != after_level
 
 
+# 作用：判断今天是否已经完成过建筑建设或升级。
+# 参数：无。
+# 返回：今天已操作过返回 true，否则返回 false。
 func was_building_upgraded_today() -> bool:
 	return bool(daily_flags.get("building_upgraded", false))
 
 
+# 作用：标记今天已经完成过一次建筑建设或升级。
+# 参数：source 是日志来源。
+# 返回：无。用于限制每天最多一次建筑行动。
 func mark_building_upgraded(source: String) -> void:
 	var before: bool = was_building_upgraded_today()
 	daily_flags["building_upgraded"] = true
@@ -294,6 +388,106 @@ func mark_building_upgraded(source: String) -> void:
 	state_changed.emit()
 
 
+# 作用：判断今天是否已经处理过随机事件。
+# 参数：无。
+# 返回：今天事件已处理返回 true，否则返回 false。
+func was_event_resolved_today() -> bool:
+	return bool(daily_flags.get("event_resolved", false))
+
+
+# 作用：标记今天事件已处理，并记录事件解决次数。
+# 参数：event_id 是事件 id；source 是日志来源。
+# 返回：无。用于避免同一天重复弹事件。
+func mark_event_resolved(event_id: String, source: String) -> void:
+	daily_flags["event_resolved"] = true
+	var resolved_events: Dictionary = event_history.get("resolved_events", {}) as Dictionary
+	resolved_events[event_id] = int(resolved_events.get(event_id, 0)) + 1
+	event_history["resolved_events"] = resolved_events
+	print("[GameState] mark_event_resolved source=%s event=%s flags=%s" % [
+		source,
+		event_id,
+		str(daily_flags)
+	])
+	state_changed.emit()
+
+
+# 作用：设置某类事件的冷却结束天数。
+# 参数：unique_key 是事件冷却分组；until_day 是冷却到第几天；source 是日志来源。
+# 返回：无。unique_key 为空时不会写入。
+func set_event_cooldown(unique_key: String, until_day: int, source: String) -> void:
+	if unique_key.is_empty():
+		return
+	var cooldowns: Dictionary = event_history.get("cooldowns", {}) as Dictionary
+	cooldowns[unique_key] = until_day
+	event_history["cooldowns"] = cooldowns
+	print("[GameState] set_event_cooldown source=%s key=%s until_day=%d" % [
+		source,
+		unique_key,
+		until_day
+	])
+
+
+# 作用：判断某类事件当前是否处于冷却中。
+# 参数：unique_key 是事件冷却分组。
+# 返回：当前天数小于等于冷却结束天数时返回 true。
+func is_event_on_cooldown(unique_key: String) -> bool:
+	if unique_key.is_empty():
+		return false
+	var cooldowns: Dictionary = event_history.get("cooldowns", {}) as Dictionary
+	var until_day: int = int(cooldowns.get(unique_key, 0))
+	return day <= until_day
+
+
+# 作用：判断指定事件是否曾经被解决过。
+# 参数：event_id 是事件 id。
+# 返回：解决次数大于 0 时返回 true。
+func has_event_been_resolved(event_id: String) -> bool:
+	var resolved_events: Dictionary = event_history.get("resolved_events", {}) as Dictionary
+	return int(resolved_events.get(event_id, 0)) > 0
+
+
+# 作用：获取下一次允许检查随机事件的天数。
+# 参数：无。
+# 返回：天数整数；缺失时默认第 2 天。
+func get_next_event_check_day() -> int:
+	return int(event_history.get("next_check_day", 2))
+
+
+# 作用：设置下一次随机事件检查日。
+# 参数：next_day 是希望设置的检查日；source 是日志来源。
+# 返回：无。实际值至少是当前天数 + 1。
+func set_next_event_check_day(next_day: int, source: String) -> void:
+	event_history["next_check_day"] = max(next_day, day + 1)
+	print("[GameState] set_next_event_check_day source=%s next_day=%d current_day=%d" % [
+		source,
+		int(event_history.get("next_check_day", 0)),
+		day
+	])
+
+
+# 作用：在近期日志中追加一条战斗或事件文本。
+# 参数：line 是日志内容；source 是日志来源。
+# 返回：无。最多保留 8 条，新的排在前面。
+func add_battle_report(line: String, source: String) -> void:
+	if line.is_empty():
+		return
+	battle_reports.push_front("第 %d 天 %s" % [day, line])
+	while battle_reports.size() > 8:
+		battle_reports.pop_back()
+	print("[GameState] add_battle_report source=%s line=%s" % [source, line])
+	state_changed.emit()
+
+
+# 作用：获取近期日志列表。
+# 参数：无。
+# 返回：日志字符串数组的副本。
+func get_battle_reports() -> Array[String]:
+	return battle_reports.duplicate()
+
+
+# 作用：设置某个岗位的人数，并确保总分配不超过可工作人口。
+# 参数：job_id 是岗位 id；amount 是目标人数；source 是日志来源。
+# 返回：人数实际变化返回 true；没有变化或岗位不存在返回 false。
 func set_job_assignment(job_id: String, amount: int, source: String) -> bool:
 	var before: int = get_job_assignment(job_id)
 	var max_assignable: int = get_assignable_population()
@@ -320,29 +514,47 @@ func set_job_assignment(job_id: String, amount: int, source: String) -> bool:
 	return after != before
 
 
+# 作用：按增量调整某个岗位人数。
+# 参数：job_id 是岗位 id；delta 是增减人数；source 是日志来源。
+# 返回：人数实际变化返回 true，否则返回 false。
 func add_job_assignment(job_id: String, delta: int, source: String) -> bool:
 	var before: int = get_job_assignment(job_id)
 	return set_job_assignment(job_id, before + delta, source)
 
 
+# 作用：获取某个岗位当前分配人数。
+# 参数：job_id 是岗位 id。
+# 返回：岗位人数；没有该岗位时返回 0。
 func get_job_assignment(job_id: String) -> int:
 	return int(job_assignments.get(job_id, 0))
 
 
+# 作用：获取全部岗位分配。
+# 参数：无。
+# 返回：岗位分配 Dictionary 的深拷贝。
 func get_job_assignments() -> Dictionary:
 	return job_assignments.duplicate(true)
 
 
+# 作用：计算可分配到岗位的人口。
+# 参数：无。
+# 返回：健康人口 + 轻伤人口；重伤和死亡不可分配。
 func get_assignable_population() -> int:
 	var healthy: int = int(population.get("healthy", 0))
 	var light_wound: int = int(population.get("light_wound", 0))
 	return healthy + light_wound
 
 
+# 作用：计算尚未分配岗位的可工作人口。
+# 参数：无。
+# 返回：可分配人口减去已分配岗位总数，最小为 0。
 func get_unassigned_population() -> int:
 	return max(get_assignable_population() - assigned_jobs_total, 0)
 
 
+# 作用：自动分配指定总人数到岗位。
+# 参数：amount 是希望分配的总人数；source 是日志来源。
+# 返回：无。会按岗位顺序每个岗位轮流放入 1 人，直到人数用完。
 func assign_jobs_total(amount: int, source: String) -> void:
 	var before: int = assigned_jobs_total
 	var max_assignable: int = get_assignable_population()
@@ -367,6 +579,9 @@ func assign_jobs_total(amount: int, source: String) -> void:
 	state_changed.emit()
 
 
+# 作用：标记已经派出第一支侦察队。
+# 参数：source 是日志来源。
+# 返回：如果本次从未派出变为已派出返回 true；原本已派出返回 false。
 func send_first_scout_team(source: String) -> bool:
 	var before: bool = bool(scout_state.get("first_scout_team_sent", false))
 	scout_state["first_scout_team_sent"] = true
@@ -379,10 +594,16 @@ func send_first_scout_team(source: String) -> bool:
 	return not before
 
 
+# 作用：判断第一支侦察队是否已经派出。
+# 参数：无。
+# 返回：已派出返回 true，否则返回 false。
 func was_first_scout_team_sent() -> bool:
 	return bool(scout_state.get("first_scout_team_sent", false))
 
 
+# 作用：标记指定区域已侦察。
+# 参数：region_id 是区域 id；source 是日志来源。
+# 返回：如果本次从未侦察变为已侦察返回 true；原本已侦察返回 false。
 func scout_region(region_id: String, source: String) -> bool:
 	var state: Dictionary = regions.get(region_id, {}) as Dictionary
 	if state.is_empty():
@@ -402,11 +623,17 @@ func scout_region(region_id: String, source: String) -> bool:
 	return not before
 
 
+# 作用：判断指定区域是否已侦察。
+# 参数：region_id 是区域 id。
+# 返回：已侦察返回 true，否则返回 false。
 func is_region_scouted(region_id: String) -> bool:
 	var state: Dictionary = regions.get(region_id, {}) as Dictionary
 	return bool(state.get("is_scouted", false))
 
 
+# 作用：初始化任务状态到指定第一个任务。
+# 参数：first_quest_id 是当前任务 id。
+# 返回：无。会清空已完成和已领奖记录。
 func initialize_quest_state(first_quest_id: String) -> void:
 	quests = {
 		"current_quest_id": first_quest_id,
@@ -418,10 +645,16 @@ func initialize_quest_state(first_quest_id: String) -> void:
 	state_changed.emit()
 
 
+# 作用：获取当前主线/引导任务 id。
+# 参数：无。
+# 返回：当前任务 id；没有任务时返回空字符串。
 func get_current_quest_id() -> String:
 	return str(quests.get("current_quest_id", ""))
 
 
+# 作用：设置当前主线/引导任务 id。
+# 参数：quest_id 是任务 id；source 是日志来源。
+# 返回：无。执行后会通知任务相关界面刷新。
 func set_current_quest_id(quest_id: String, source: String) -> void:
 	var before: String = get_current_quest_id()
 	quests["current_quest_id"] = quest_id
@@ -434,6 +667,9 @@ func set_current_quest_id(quest_id: String, source: String) -> void:
 	state_changed.emit()
 
 
+# 作用：标记指定任务已完成。
+# 参数：quest_id 是任务 id；source 是日志来源。
+# 返回：无。完成状态会写入 quests.completed。
 func mark_quest_completed(quest_id: String, source: String) -> void:
 	var completed: Dictionary = quests.get("completed", {}) as Dictionary
 	completed[quest_id] = true
@@ -443,11 +679,17 @@ func mark_quest_completed(quest_id: String, source: String) -> void:
 	state_changed.emit()
 
 
+# 作用：判断指定任务是否已完成。
+# 参数：quest_id 是任务 id。
+# 返回：已完成返回 true，否则返回 false。
 func is_quest_completed(quest_id: String) -> bool:
 	var completed: Dictionary = quests.get("completed", {}) as Dictionary
 	return bool(completed.get(quest_id, false))
 
 
+# 作用：标记指定任务奖励已发放。
+# 参数：quest_id 是任务 id；source 是日志来源。
+# 返回：无。用于防止奖励重复领取。
 func mark_quest_rewarded(quest_id: String, source: String) -> void:
 	var rewarded: Dictionary = quests.get("rewarded", {}) as Dictionary
 	rewarded[quest_id] = true
@@ -457,11 +699,17 @@ func mark_quest_rewarded(quest_id: String, source: String) -> void:
 	state_changed.emit()
 
 
+# 作用：判断指定任务奖励是否已发放。
+# 参数：quest_id 是任务 id。
+# 返回：已发放返回 true，否则返回 false。
 func is_quest_rewarded(quest_id: String) -> bool:
 	var rewarded: Dictionary = quests.get("rewarded", {}) as Dictionary
 	return bool(rewarded.get(quest_id, false))
 
 
+# 作用：根据寒炉等级、煤炭数量和天气压力重新计算温度评分。
+# 参数：source 是日志来源，默认 manual。
+# 返回：无。会发出温度变化信号，并刷新营地状态文本。
 func refresh_temperature_score(source: String = "manual") -> void:
 	var before: int = temperature_score
 	var coal_amount: int = get_resource_amount("coal")
@@ -480,6 +728,9 @@ func refresh_temperature_score(source: String = "manual") -> void:
 	refresh_shelter_status("temperature_changed:%s" % source)
 
 
+# 作用：把温度评分转换成中文状态。
+# 参数：无。
+# 返回：温暖、可忍受、寒冷或危险。
 func get_temperature_status() -> String:
 	if temperature_score >= 80:
 		return "温暖"
@@ -490,6 +741,9 @@ func get_temperature_status() -> String:
 	return "危险"
 
 
+# 作用：获取存活人口总数。
+# 参数：无。
+# 返回：健康 + 轻伤 + 重伤人数，不包含死亡。
 func get_alive_population() -> int:
 	var healthy: int = int(population.get("healthy", 0))
 	var light_wound: int = int(population.get("light_wound", 0))
@@ -497,16 +751,25 @@ func get_alive_population() -> int:
 	return healthy + light_wound + heavy_wound
 
 
+# 作用：获取病患人口数量。
+# 参数：无。
+# 返回：轻伤 + 重伤人数。
 func get_sick_population() -> int:
 	var light_wound: int = int(population.get("light_wound", 0))
 	var heavy_wound: int = int(population.get("heavy_wound", 0))
 	return light_wound + heavy_wound
 
 
+# 作用：获取健康人口数量。
+# 参数：无。
+# 返回：健康人口整数。
 func get_healthy_population() -> int:
 	return int(population.get("healthy", 0))
 
 
+# 作用：增加或减少士气分数，并刷新营地状态。
+# 参数：amount 是士气增量；source 是日志来源。
+# 返回：实际变化量；士气会被裁剪在 0 到 100 之间。
 func add_morale(amount: int, source: String) -> int:
 	var before: int = morale_score
 	morale_score = int(clamp(morale_score + amount, 0, 100))
@@ -524,6 +787,9 @@ func add_morale(amount: int, source: String) -> int:
 	return delta
 
 
+# 作用：刷新营地健康状态和顶部状态文案。
+# 参数：source 是日志来源，默认 manual。
+# 返回：无。该方法只更新状态字段，不主动发出信号。
 func refresh_shelter_status(source: String = "manual") -> void:
 	var before_health_status: String = health_status
 	var before_status_text: String = shelter_status_text
@@ -546,6 +812,9 @@ func refresh_shelter_status(source: String = "manual") -> void:
 		])
 
 
+# 作用：根据资源配置生成新游戏初始资源。
+# 参数：无。
+# 返回：资源 id 到初始数量的 Dictionary。
 func _build_initial_resources() -> Dictionary:
 	var result: Dictionary = {}
 	var configs: Dictionary = DataLoader.get_resource_configs()
@@ -558,6 +827,9 @@ func _build_initial_resources() -> Dictionary:
 	return result
 
 
+# 作用：根据幸存者配置生成新游戏初始人口。
+# 参数：无。
+# 返回：包含健康、轻伤、重伤、死亡人数的 Dictionary。
 func _build_initial_population() -> Dictionary:
 	var counts: Dictionary = DataLoader.get_survivor_initial_counts()
 	return {
@@ -568,10 +840,14 @@ func _build_initial_population() -> Dictionary:
 	}
 
 
+# 作用：根据建筑配置生成新游戏初始建筑状态。
+# 参数：无。
+# 返回：建筑 id 到运行时状态的 Dictionary，包含 is_unlocked、is_built、current_level。
 func _build_initial_buildings() -> Dictionary:
 	var result: Dictionary = {}
 	var configs: Dictionary = DataLoader.get_building_configs()
 
+	# 初始建成建筑来自 INITIAL_BUILT_BUILDINGS，其余建筑只按 unlock_day 判断是否已解锁。
 	for building_id_value: Variant in configs.keys():
 		var building_id: String = str(building_id_value)
 		var config: Dictionary = configs.get(building_id, {}) as Dictionary
@@ -591,6 +867,9 @@ func _build_initial_buildings() -> Dictionary:
 	return result
 
 
+# 作用：生成新游戏初始岗位分配。
+# 参数：无。
+# 返回：岗位 id 到人数的 Dictionary，所有岗位初始为 0。
 func _build_initial_job_assignments() -> Dictionary:
 	var result: Dictionary = {}
 	var job_order: Array[String] = DataLoader.get_job_order()
@@ -599,12 +878,18 @@ func _build_initial_job_assignments() -> Dictionary:
 	return result
 
 
+# 作用：生成新游戏初始侦察状态。
+# 参数：无。
+# 返回：侦察状态 Dictionary。
 func _build_initial_scout_state() -> Dictionary:
 	return {
 		"first_scout_team_sent": false
 	}
 
 
+# 作用：生成新游戏初始区域状态。
+# 参数：无。
+# 返回：区域运行时状态 Dictionary，目前先记录第一个教学侦察区域。
 func _build_initial_regions() -> Dictionary:
 	return {
 		FIRST_SCOUT_REGION_ID: {
@@ -613,6 +898,9 @@ func _build_initial_regions() -> Dictionary:
 	}
 
 
+# 作用：生成新游戏初始任务状态。
+# 参数：无。
+# 返回：任务状态 Dictionary，包含当前任务、已完成、已领奖。
 func _build_initial_quests() -> Dictionary:
 	var quest_order: Array[String] = DataLoader.get_quest_order()
 	var first_quest_id: String = ""
@@ -625,17 +913,38 @@ func _build_initial_quests() -> Dictionary:
 	}
 
 
+# 作用：生成每日标记的初始值。
+# 参数：无。
+# 返回：每日标记 Dictionary，例如今天是否升级建筑、是否处理事件。
 func _build_initial_daily_flags() -> Dictionary:
 	return {
-		"building_upgraded": false
+		"building_upgraded": false,
+		"event_resolved": false
 	}
 
 
+# 作用：生成事件历史初始状态。
+# 参数：无。
+# 返回：事件历史 Dictionary，包含已解决事件、冷却和下次检查日。
+func _build_initial_event_history() -> Dictionary:
+	return {
+		"resolved_events": {},
+		"cooldowns": {},
+		"next_check_day": 2
+	}
+
+
+# 作用：重置每日标记。
+# 参数：source 是日志来源。
+# 返回：无。通常在推进到新一天时调用。
 func _reset_daily_flags(source: String) -> void:
 	daily_flags = _build_initial_daily_flags()
 	print("[GameState] reset_daily_flags source=%s flags=%s" % [source, str(daily_flags)])
 
 
+# 作用：获取指定建筑状态，如果不存在则创建默认状态。
+# 参数：building_id 是建筑 id。
+# 返回：建筑运行时状态 Dictionary。
 func _get_or_create_building_state(building_id: String) -> Dictionary:
 	var state: Dictionary = buildings.get(building_id, {}) as Dictionary
 	if state.is_empty():
@@ -647,6 +956,9 @@ func _get_or_create_building_state(building_id: String) -> Dictionary:
 	return state
 
 
+# 作用：根据温度、士气和病患情况生成营地状态文本。
+# 参数：无。
+# 返回：中文状态文案。
 func _build_shelter_status_text() -> String:
 	if get_temperature_status() == "危险":
 		return "寒炉供暖危险"
@@ -659,10 +971,14 @@ func _build_shelter_status_text() -> String:
 	return "营地维持中"
 
 
+# 作用：按当前天数自动解锁达到 unlock_day 的建筑。
+# 参数：source 是日志来源。
+# 返回：无。有建筑解锁时会发出任务相关信号。
 func _update_building_unlocks_for_day(source: String) -> void:
 	var configs: Dictionary = DataLoader.get_building_configs()
 	var changed: bool = false
 
+	# 每天推进后检查所有建筑，保证 UI 和任务链都能感知第几天开放了什么建筑。
 	for building_id_value: Variant in configs.keys():
 		var building_id: String = str(building_id_value)
 		var config: Dictionary = configs.get(building_id, {}) as Dictionary
@@ -694,6 +1010,9 @@ func _update_building_unlocks_for_day(source: String) -> void:
 		quest_relevant_state_changed.emit()
 
 
+# 作用：按资源配置裁剪资源数量。
+# 参数：resource_id 是资源 id；amount 是待写入数量。
+# 返回：裁剪后的数量，不会低于 min_amount，也不会超过 max_amount。
 func _clamp_resource(resource_id: String, amount: int) -> int:
 	var config: Dictionary = DataLoader.get_resource_config(resource_id)
 	var min_amount: int = int(config.get("min_amount", 0))
@@ -705,12 +1024,18 @@ func _clamp_resource(resource_id: String, amount: int) -> int:
 	return result
 
 
+# 作用：清空所有岗位分配。
+# 参数：无。
+# 返回：无。只把各岗位人数置 0，不刷新 total。
 func _clear_job_assignments() -> void:
 	for job_id_value: Variant in job_assignments.keys():
 		var job_id: String = str(job_id_value)
 		job_assignments[job_id] = 0
 
 
+# 作用：重新统计已分配岗位总人数。
+# 参数：无。
+# 返回：无。结果写入 assigned_jobs_total。
 func _refresh_assigned_jobs_total() -> void:
 	var total: int = 0
 	for job_id_value: Variant in job_assignments.keys():
@@ -719,6 +1044,9 @@ func _refresh_assigned_jobs_total() -> void:
 	assigned_jobs_total = total
 
 
+# 作用：当可工作人口下降时，自动压缩岗位分配，避免分配人数超过人口。
+# 参数：source 是日志来源。
+# 返回：无。会从岗位顺序末尾开始移除超出的分配人数。
 func _clamp_job_assignments_to_population(source: String) -> void:
 	var max_assignable: int = get_assignable_population()
 	_refresh_assigned_jobs_total()
@@ -727,6 +1055,7 @@ func _clamp_job_assignments_to_population(source: String) -> void:
 
 	var overflow: int = assigned_jobs_total - max_assignable
 	var job_order: Array[String] = DataLoader.get_job_order()
+	# 从后面的岗位开始回收人数，可以尽量保留前序岗位的基础生存产出。
 	for index: int in range(job_order.size() - 1, -1, -1):
 		if overflow <= 0:
 			break

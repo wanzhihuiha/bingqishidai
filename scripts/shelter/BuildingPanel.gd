@@ -6,17 +6,26 @@ var message_label: Label
 var card_rows: Dictionary = {}
 
 
+# 作用：Godot 自动回调；构建建筑面板、连接状态信号，并刷新全部建筑卡片。
+# 参数：无。
+# 返回：无。
 func _ready() -> void:
 	_build_ui()
 	_connect_state_signals()
 	refresh()
 
 
+# 作用：刷新所有建筑卡片显示。
+# 参数：无。
+# 返回：无。会按 DataLoader 中的建筑顺序逐个刷新。
 func refresh() -> void:
 	for building_id: String in DataLoader.get_building_order():
 		_refresh_card(building_id)
 
 
+# 作用：动态创建建筑管理面板 UI。
+# 参数：无。
+# 返回：无。会创建标题、提示、消息栏、滚动区域和建筑卡片网格。
 func _build_ui() -> void:
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -55,6 +64,9 @@ func _build_ui() -> void:
 		grid.add_child(_make_building_card(building_id))
 
 
+# 作用：创建一个建筑卡片。
+# 参数：building_id 是建筑 id。
+# 返回：包含标题、状态、效果、成本、收益、功能和按钮的 PanelContainer。
 func _make_building_card(building_id: String) -> PanelContainer:
 	var card: PanelContainer = PanelContainer.new()
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -106,6 +118,9 @@ func _make_building_card(building_id: String) -> PanelContainer:
 	return card
 
 
+# 作用：刷新指定建筑卡片的文本和按钮状态。
+# 参数：building_id 是建筑 id。
+# 返回：无。建筑未解锁、满级、当天已操作都会影响按钮状态。
 func _refresh_card(building_id: String) -> void:
 	var row: Dictionary = card_rows.get(building_id, {}) as Dictionary
 	if row.is_empty():
@@ -162,6 +177,9 @@ func _refresh_card(building_id: String) -> void:
 		button.text = "明天继续"
 
 
+# 作用：响应建筑卡片上的建造/升级按钮。
+# 参数：building_id 是建筑 id；button 是被点击的按钮节点。
+# 返回：无。会调用 BuildingManager，展示结果，播放反馈，并发出 action_finished 信号。
 func _on_building_action_pressed(building_id: String, button: Button) -> void:
 	var result: Dictionary = BuildingManager.upgrade_building(building_id)
 	var success: bool = bool(result.get("success", false))
@@ -175,6 +193,9 @@ func _on_building_action_pressed(building_id: String, button: Button) -> void:
 	action_finished.emit(message, success)
 
 
+# 作用：在建筑面板顶部展示操作结果。
+# 参数：message 是提示文本；success 表示本次操作是否成功。
+# 返回：无。成功和失败会使用不同颜色。
 func _show_message(message: String, success: bool) -> void:
 	if message_label == null:
 		return
@@ -185,6 +206,9 @@ func _show_message(message: String, success: bool) -> void:
 		message_label.add_theme_color_override("font_color", Color(1.0, 0.25, 0.18, 1.0))
 
 
+# 作用：播放按钮颜色反馈。
+# 参数：button 是被点击的按钮；success 表示使用成功色还是失败色。
+# 返回：无。通过 Tween 做一次短暂闪色。
 func _play_button_feedback(button: Button, success: bool) -> void:
 	if button == null:
 		return
@@ -196,6 +220,9 @@ func _play_button_feedback(button: Button, success: bool) -> void:
 	tween.tween_property(button, "modulate", Color.WHITE, 0.2)
 
 
+# 作用：获取建筑解锁功能的补充文本。
+# 参数：building_id 是建筑 id。
+# 返回：功能入口说明；没有特殊解锁时返回空字符串。
 func _get_feature_text(building_id: String) -> String:
 	if building_id == "training_ground" and BuildingManager.can_show_feature_unlocked("hero_squad"):
 		return "入口：英雄小队系统已解锁"
@@ -204,6 +231,9 @@ func _get_feature_text(building_id: String) -> String:
 	return ""
 
 
+# 作用：连接全局状态信号，让建筑面板随游戏状态自动刷新。
+# 参数：无。
+# 返回：无。已连接时不会重复连接。
 func _connect_state_signals() -> void:
 	if not GameState.state_changed.is_connected(refresh):
 		GameState.state_changed.connect(refresh)
@@ -213,6 +243,9 @@ func _connect_state_signals() -> void:
 		GameState.quest_relevant_state_changed.connect(refresh)
 
 
+# 作用：把任意数组转换成中文分号连接文本。
+# 参数：values 是任意值数组。
+# 返回：拼接后的字符串。
 func _join_values(values: Array) -> String:
 	var parts: PackedStringArray = PackedStringArray()
 	for value: Variant in values:

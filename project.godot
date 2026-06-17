@@ -24,6 +24,7 @@ JobManager="*res://scripts/managers/JobManager.gd"
 QuestManager="*res://scripts/managers/QuestManager.gd"
 NightSettlementManager="*res://scripts/managers/NightSettlementManager.gd"
 SceneRouter="*res://scripts/managers/SceneRouter.gd"
+EventManager="*res://scripts/managers/EventManager.gd"
 
 [display]
 
