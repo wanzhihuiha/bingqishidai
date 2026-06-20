@@ -45,6 +45,7 @@ var collect_cards: Dictionary = {}
 var quest_title_label: Label
 var quest_progress_label: Label
 var quest_reward_label: Label
+var quest_hint_label: Label
 var status_health_label: Label
 var status_sick_label: Label
 var status_morale_label: Label
@@ -577,6 +578,10 @@ func _make_quest_panel() -> PanelContainer:
 	quest_reward_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(quest_reward_label)
 
+	quest_hint_label = Label.new()
+	quest_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(quest_hint_label)
+
 	var divider: HSeparator = HSeparator.new()
 	box.add_child(divider)
 
@@ -886,7 +891,7 @@ func _get_job_note_text(job_id: String, preview: Dictionary, resources: Dictiona
 
 # 作用：刷新当前目标面板。
 # 参数：无。
-# 返回：无。会同步任务标题、进度、奖励，并刷新建筑状态面板。
+# 返回：无。会同步任务标题、进度、奖励、建议，并刷新建筑状态面板。
 func _refresh_quest_panel() -> void:
 	if quest_title_label == null:
 		return
@@ -894,15 +899,19 @@ func _refresh_quest_panel() -> void:
 	var title: String = ""
 	var progress: String = ""
 	var reward: String = ""
+	var hint: String = ""
 	title = str(QuestManager.get_current_quest_title())
 	progress = str(QuestManager.get_current_quest_progress_text())
 	reward = str(QuestManager.get_current_quest_reward_text())
+	hint = str(QuestManager.get_current_quest_hint_text())
 
 	if title.is_empty():
 		title = "暂无目标"
 	quest_title_label.text = title
 	quest_progress_label.text = "进度：%s" % progress
 	quest_reward_label.text = "奖励：%s" % reward
+	if quest_hint_label != null:
+		quest_hint_label.text = "建议：%s" % hint
 	_refresh_building_status_panel()
 
 

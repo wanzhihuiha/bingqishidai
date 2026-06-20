@@ -6,6 +6,15 @@ const RESOURCE_REWARD_VALUES: Dictionary = {
 	"parts": 1,
 	"hope": 2
 }
+const RESOURCE_HINT_ORDER: Array[String] = ["wood", "food", "coal", "medicine", "parts", "hope"]
+const FURNACE_ID: String = "furnace"
+const KITCHEN_ID: String = "kitchen"
+const MEDICAL_TENT_ID: String = "medical_tent"
+const WORKSHOP_ID: String = "workshop"
+const TRAINING_GROUND_ID: String = "training_ground"
+const INTRO_EVENT_FIRST_DAY: int = 4
+const INTRO_EVENT_LAST_DAY: int = 5
+const MIDGAME_UNLOCK_DAY: int = 8
 
 var is_processing_quest: bool = false
 
@@ -77,6 +86,39 @@ func get_current_quest_title() -> String:
 	if quest.is_empty():
 		return "前期引导已完成"
 	return str(quest.get("title", "暂无目标"))
+
+
+# 作用：生成右侧目标面板的单行动态建议。
+# 参数：无。
+# 返回：中文建议文本；没有当前任务时返回收尾提示。
+func get_current_quest_hint_text() -> String:
+	var quest_id: String = get_current_quest_id()
+	if quest_id.is_empty():
+		return "前期引导已完成，可继续观察建筑状态并推进冰原地图。"
+
+	match quest_id:
+		"guide_collect_wood_once":
+			return _build_collect_wood_hint()
+		"guide_collect_food_once":
+			return _build_collect_food_hint()
+		"guide_upgrade_furnace_level_2":
+			return _build_furnace_level_2_hint()
+		"guide_build_kitchen":
+			return _build_kitchen_hint()
+		"guide_build_medical_tent":
+			return _build_medical_tent_hint()
+		"guide_assign_three_jobs":
+			if GameState.day >= MIDGAME_UNLOCK_DAY - 2:
+				return _build_day_8_prep_hint()
+			return _build_job_assignment_hint()
+		"guide_unlock_training_ground":
+			return _build_day_8_prep_hint()
+		"guide_send_first_scout_team":
+			return _build_send_first_scout_team_hint()
+		"guide_scout_first_region":
+			return _build_scout_first_region_hint()
+		_:
+			return ""
 
 
 # 作用：检查当前任务是否已经满足完成条件。
@@ -290,6 +332,118 @@ func _build_reward_text(reward: Dictionary) -> String:
 	return "%s %s" % [GameState.get_resource_name(target_id), amount_text]
 
 
+# 作用：生成收取木材阶段的动态建议。
+# 参数：无。
+# 返回：说明当前动作、下一步主线和木材用途的中文建议。
+func _build_collect_wood_hint() -> String:
+	var furnace_cost: Dictionary = BuildingManager.get_building_cost_for_level(FURNACE_ID, 2)
+	var wood_need: int = int(furnace_cost.get("wood", 0))
+	return "主线先收一次木材；下一步还要收食物，再准备把寒炉升到 2 级；先记住寒炉 2 级要留 %d 木材" % wood_need
+
+
+# 作用：生成收取食物阶段的动态建议。
+# 参数：无。
+# 返回：说明当前动作、今晚消耗和后续寒炉升级的中文建议。
+func _build_collect_food_hint() -> String:
+	var food_need_tonight: int = GameState.get_alive_population()
+	return "主线现在要先收一次食物；今晚基础会消耗 %d 食物；收完后下一步是把寒炉升到 2 级" % food_need_tonight
+
+
+# 作用：生成寒炉升到 2 级时的动态建议。
+# 参数：无。
+# 返回：包含升级成本、资源缺口和煤炭收益的中文建议。
+func _build_furnace_level_2_hint() -> String:
+	var target_level: int = 2
+	var upgrade_cost: Dictionary = BuildingManager.get_building_cost_for_level(FURNACE_ID, target_level)
+	var current_level_config: Dictionary = BuildingManager.get_furnace_current_level_config()
+	var target_level_config: Dictionary = BuildingManager.get_furnace_level_config(target_level)
+	var current_production: Dictionary = current_level_config.get("production", {}) as Dictionary
+	var target_production: Dictionary = target_level_config.get("production", {}) as Dictionary
+	var current_coal_need: int = int(current_production.get("coal_cost_per_night", 0))
+	var target_coal_need: int = int(target_production.get("coal_cost_per_night", 0))
+	return "主线现在要把寒炉升到 2 级；当前需 %s（%s）；升成后每晚煤炭 %d -> %d，完成后目标会转去建厨房" % [
+		_build_cost_text(upgrade_cost),
+		_build_missing_text(upgrade_cost),
+		current_coal_need,
+		target_coal_need
+	]
+
+
+# 作用：生成厨房阶段的动态建议。
+# 参数：无。
+# 返回：包含开放时间、建造缺口和食物节省预估的中文建议。
+func _build_kitchen_hint() -> String:
+	var build_cost: Dictionary = BuildingManager.get_building_cost_for_level(KITCHEN_ID, 1)
+	var unlock_text: String = "厨房已开放"
+	var unlock_day: int = _get_building_unlock_day(KITCHEN_ID)
+	if GameState.day < unlock_day:
+		unlock_text = "第 %d 天开放" % unlock_day
+	var saved_food: int = _estimate_food_saved_with_projected_cooks(1)
+	return "%s；主线现在要建厨房；当前需 %s（%s）；建成后安排 1 名厨师，今晚约省 %d 食物" % [
+		unlock_text,
+		_build_cost_text(build_cost),
+		_build_missing_text(build_cost),
+		saved_food
+	]
+
+
+# 作用：生成医务帐阶段的动态建议。
+# 参数：无。
+# 返回：包含事件前瞻、建造缺口和药品/医护建议的中文建议。
+func _build_medical_tent_hint() -> String:
+	var build_cost: Dictionary = BuildingManager.get_building_cost_for_level(MEDICAL_TENT_ID, 1)
+	return "%s；主线下一步是建医务帐；当前需 %s（%s）；建成后至少安排 1 名医护，处理发烧时会更稳" % [
+		_build_intro_event_text(),
+		_build_cost_text(build_cost),
+		_build_missing_text(build_cost)
+	]
+
+
+# 作用：生成岗位分配阶段的动态建议。
+# 参数：无。
+# 返回：包含岗位目标和首次伤病事件应对方式的中文建议。
+func _build_job_assignment_hint() -> String:
+	var unassigned_population: int = GameState.get_unassigned_population()
+	return "主线现在要分配满 3 个岗位；当前还可分配 %d 人；建议至少留 1 名医护，第 4-5 天处理发烧会更稳" % unassigned_population
+
+
+# 作用：生成第 8 天前后的中期准备建议。
+# 参数：无。
+# 返回：包含训练场、工坊成本和优先级建议的中文建议。
+func _build_day_8_prep_hint() -> String:
+	var days_left: int = max(MIDGAME_UNLOCK_DAY - GameState.day, 0)
+	var prefix: String = "第 8 天已到"
+	if days_left > 0:
+		prefix = "距第 8 天还有 %d 天" % days_left
+	var training_cost: Dictionary = BuildingManager.get_building_cost_for_level(TRAINING_GROUND_ID, 1)
+	var workshop_cost: Dictionary = BuildingManager.get_building_cost_for_level(WORKSHOP_ID, 1)
+	var training_text: String = _build_cost_text(training_cost)
+	var training_missing_text: String = _build_missing_text(training_cost)
+	var workshop_text: String = _build_cost_text(workshop_cost)
+	var workshop_missing_text: String = _build_missing_text(workshop_cost)
+	return "%s；第 8 天会自动解锁训练场和工坊，这个目标也会自动完成；下一步要进入冰原地图派出第一支侦察队。现在先预留训练场 %s（%s），资源够再补工坊 %s（%s）" % [
+		prefix,
+		training_text,
+		training_missing_text,
+		workshop_text,
+		workshop_missing_text
+	]
+
+
+# 作用：生成派出第一支侦察队阶段的动态建议。
+# 参数：无。
+# 返回：说明进入地图的原因、主线下一步和当前动作的中文建议。
+func _build_send_first_scout_team_hint() -> String:
+	return "第 8 天后主线会转到地图；现在要进入冰原地图派出第一支侦察队；派出后下一步就是侦察断松林"
+
+
+# 作用：生成侦察第一个区域阶段的动态建议。
+# 参数：无。
+# 返回：说明当前侦察目标、完成后的结果和资源意义的中文建议。
+func _build_scout_first_region_hint() -> String:
+	return "主线现在要侦察断松林；在地图里点占位按钮完成后，本轮前期引导会收尾；断松林是你后面稳定拿木材的第一块外部区域"
+
+
 # 作用：获取建筑中文名。
 # 参数：building_id 是建筑 id。
 # 返回：建筑中文名；配置缺失时返回 building_id。
@@ -304,3 +458,63 @@ func _get_building_name(building_id: String) -> String:
 func _get_region_name(region_id: String) -> String:
 	var config: Dictionary = DataLoader.get_region_config(region_id)
 	return str(config.get("name", region_id))
+
+
+# 作用：获取建筑的开放天数。
+# 参数：building_id 是建筑 id。
+# 返回：建筑配置中的 unlock_day；没有配置时默认 1。
+func _get_building_unlock_day(building_id: String) -> int:
+	var config: Dictionary = DataLoader.get_building_config(building_id)
+	return int(config.get("unlock_day", 1))
+
+
+# 作用：根据当前人口和预设厨师人数，估算厨房 1 级的节省食物。
+# 参数：projected_cook_count 是建议安排的厨师人数。
+# 返回：向下取整后的预计节省食物数量。
+func _estimate_food_saved_with_projected_cooks(projected_cook_count: int) -> int:
+	var kitchen_level_config: Dictionary = BuildingManager.get_building_level_config(KITCHEN_ID, 1)
+	var production: Dictionary = kitchen_level_config.get("production", {}) as Dictionary
+	var rate_per_cook: float = float(production.get("food_save_rate", 0.0))
+	var save_rate: float = clamp(float(projected_cook_count) * rate_per_cook, 0.0, 0.5)
+	return int(floor(float(GameState.get_alive_population()) * save_rate))
+
+
+# 作用：把建造或升级成本转换成稳定顺序的中文文本。
+# 参数：cost 是资源 id 到数量的 Dictionary。
+# 返回：中文成本文本，例如“木材 10、食物 8”。
+func _build_cost_text(cost: Dictionary) -> String:
+	var parts: PackedStringArray = PackedStringArray()
+	for resource_id: String in RESOURCE_HINT_ORDER:
+		if not cost.has(resource_id):
+			continue
+		var amount: int = int(cost.get(resource_id, 0))
+		if amount <= 0:
+			continue
+		parts.append("%s %d" % [GameState.get_resource_name(resource_id), amount])
+	if parts.is_empty():
+		return "无需资源"
+	return "、".join(parts)
+
+
+# 作用：把当前资源缺口转换成中文提示。
+# 参数：cost 是资源 id 到数量的 Dictionary。
+# 返回：有缺口时返回“还差……”；资源已够时返回“资源已够”。
+func _build_missing_text(cost: Dictionary) -> String:
+	var missing: Dictionary = BuildingManager.get_missing_resources(cost)
+	if missing.is_empty():
+		return "资源已够"
+	var missing_text: String = BuildingManager.get_missing_resources_text(missing)
+	return missing_text.trim_prefix("缺少：")
+
+
+# 作用：生成首次伤病事件的时间提示。
+# 参数：无。
+# 返回：基于当前天数的中文前瞻文本。
+func _build_intro_event_text() -> String:
+	if GameState.day < INTRO_EVENT_FIRST_DAY:
+		return "第 %d-%d 天可能遇到孩子发烧" % [INTRO_EVENT_FIRST_DAY, INTRO_EVENT_LAST_DAY]
+	if GameState.day == INTRO_EVENT_FIRST_DAY:
+		return "今天开始可能遇到孩子发烧"
+	if GameState.day == INTRO_EVENT_LAST_DAY:
+		return "今天仍可能遇到孩子发烧"
+	return "近期会持续出现伤病事件"
