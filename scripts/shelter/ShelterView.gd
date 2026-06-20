@@ -76,6 +76,8 @@ var hero_panel: PanelContainer
 var hero_list_box: VBoxContainer
 var hero_empty_label: Label
 var hero_rows: Dictionary = {}
+var squad_list_box: VBoxContainer
+var squad_rows: Dictionary = {}
 var job_total_label: Label
 var job_assignable_label: Label
 var job_rows: Dictionary = {}
@@ -379,11 +381,11 @@ func _make_center_panel() -> PanelContainer:
 
 # 作用：创建英雄子面板。
 # 参数：无。
-# 返回：PanelContainer，内部按训练场入口状态展示英雄列表或提示文本。
+# 返回：PanelContainer，内部按训练场入口状态展示英雄列表和固定三队编成。
 func _make_hero_panel() -> PanelContainer:
 	hero_panel = PanelContainer.new()
 	hero_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hero_panel.custom_minimum_size = Vector2(0, 260)
+	hero_panel.custom_minimum_size = Vector2(0, 420)
 
 	var box: VBoxContainer = VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
@@ -404,6 +406,18 @@ func _make_hero_panel() -> PanelContainer:
 
 	for hero_id: String in DataLoader.get_hero_order():
 		hero_list_box.add_child(_make_hero_card(hero_id))
+
+	var squad_title: Label = Label.new()
+	squad_title.text = "小队编成"
+	squad_title.add_theme_font_size_override("font_size", 22)
+	box.add_child(squad_title)
+
+	squad_list_box = VBoxContainer.new()
+	squad_list_box.add_theme_constant_override("separation", 10)
+	box.add_child(squad_list_box)
+
+	for squad_id: String in DataLoader.get_squad_order():
+		squad_list_box.add_child(_make_squad_card(squad_id))
 
 	return hero_panel
 
@@ -453,6 +467,82 @@ func _make_hero_card(hero_id: String) -> PanelContainer:
 		"role": role_label,
 		"tags": tags_label,
 		"status": status_label
+	}
+	return card
+
+
+# 作用：创建单个固定小队编成卡片。
+# 参数：squad_id 是小队 id。
+# 返回：PanelContainer，包含小队说明、当前成员和编成按钮。
+func _make_squad_card(squad_id: String) -> PanelContainer:
+	var card: PanelContainer = PanelContainer.new()
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	var box: VBoxContainer = VBoxContainer.new()
+	box.add_theme_constant_override("separation", 6)
+	card.add_child(box)
+
+	var title_label: Label = Label.new()
+	title_label.add_theme_font_size_override("font_size", 18)
+	box.add_child(title_label)
+
+	var desc_label: Label = Label.new()
+	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(desc_label)
+
+	var meta_label: Label = Label.new()
+	meta_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(meta_label)
+
+	var heroes_label: Label = Label.new()
+	heroes_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(heroes_label)
+
+	var actions: HBoxContainer = HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 8)
+	box.add_child(actions)
+
+	var add_button: Button = Button.new()
+	add_button.text = "编入英雄"
+	add_button.custom_minimum_size = Vector2(110, 34)
+	add_button.pressed.connect(_on_add_hero_to_squad_pressed.bind(squad_id))
+	actions.add_child(add_button)
+
+	var remove_button: Button = Button.new()
+	remove_button.text = "移除末位"
+	remove_button.custom_minimum_size = Vector2(110, 34)
+	remove_button.pressed.connect(_on_remove_last_hero_from_squad_pressed.bind(squad_id))
+	actions.add_child(remove_button)
+
+	var clear_button: Button = Button.new()
+	clear_button.text = "清空编队"
+	clear_button.custom_minimum_size = Vector2(110, 34)
+	clear_button.pressed.connect(_on_clear_squad_pressed.bind(squad_id))
+	actions.add_child(clear_button)
+
+	var dispatch_button: Button = Button.new()
+	dispatch_button.text = "出发"
+	dispatch_button.custom_minimum_size = Vector2(90, 34)
+	dispatch_button.pressed.connect(_on_dispatch_squad_pressed.bind(squad_id))
+	actions.add_child(dispatch_button)
+
+	var recall_button: Button = Button.new()
+	recall_button.text = "召回"
+	recall_button.custom_minimum_size = Vector2(90, 34)
+	recall_button.pressed.connect(_on_recall_squad_pressed.bind(squad_id))
+	actions.add_child(recall_button)
+
+	squad_rows[squad_id] = {
+		"card": card,
+		"title": title_label,
+		"description": desc_label,
+		"meta": meta_label,
+		"heroes": heroes_label,
+		"add": add_button,
+		"remove": remove_button,
+		"clear": clear_button,
+		"dispatch": dispatch_button,
+		"recall": recall_button
 	}
 	return card
 
@@ -830,20 +920,23 @@ func _refresh_feature_buttons() -> void:
 
 # 作用：刷新英雄子面板。
 # 参数：无。
-# 返回：无。会根据训练场入口状态和英雄加入状态更新展示。
+# 返回：无。会根据训练场入口状态和英雄加入状态更新展示，并刷新固定三队编成。
 func _refresh_hero_panel() -> void:
-	if hero_panel == null or hero_empty_label == null or hero_list_box == null:
+	if hero_panel == null or hero_empty_label == null or hero_list_box == null or squad_list_box == null:
 		return
 
 	var can_show: bool = BuildingManager.can_show_feature_unlocked("hero_squad")
 	hero_list_box.visible = can_show
+	squad_list_box.visible = can_show
 	if not can_show:
 		hero_empty_label.text = "训练场 1 级后解锁英雄小队入口。"
 		return
 
-	hero_empty_label.text = "已加入英雄会随天数逐步到位，未加入英雄会显示预计加入时间。"
+	hero_empty_label.text = "已加入英雄会随天数逐步到位。D3 只实现固定三队编成，不包含派遣和补给结算。"
 	for hero_id: String in DataLoader.get_hero_order():
 		_refresh_hero_card(hero_id)
+	for squad_id: String in DataLoader.get_squad_order():
+		_refresh_squad_card(squad_id)
 
 
 # 作用：刷新单个英雄卡片。
@@ -894,6 +987,146 @@ func _refresh_hero_card(hero_id: String) -> void:
 	else:
 		status_label.text = "状态：第 %d 天加入，未加入，不可派遣" % join_day
 		card.modulate = Color(0.65, 0.65, 0.65, 1.0)
+
+
+# 作用：刷新单个固定小队编成卡片。
+# 参数：squad_id 是小队 id。
+# 返回：无。会显示小队说明、状态、补给和当前成员。
+func _refresh_squad_card(squad_id: String) -> void:
+	var row_info: Dictionary = squad_rows.get(squad_id, {}) as Dictionary
+	if row_info.is_empty():
+		return
+
+	var config: Dictionary = DataLoader.get_squad_config(squad_id)
+	var state: Dictionary = GameState.get_squad_state(squad_id)
+	var title_label: Label = row_info.get("title") as Label
+	var desc_label: Label = row_info.get("description") as Label
+	var meta_label: Label = row_info.get("meta") as Label
+	var heroes_label: Label = row_info.get("heroes") as Label
+	var add_button: Button = row_info.get("add") as Button
+	var remove_button: Button = row_info.get("remove") as Button
+	var clear_button: Button = row_info.get("clear") as Button
+	var dispatch_button: Button = row_info.get("dispatch") as Button
+	var recall_button: Button = row_info.get("recall") as Button
+	if title_label == null or desc_label == null or meta_label == null or heroes_label == null or add_button == null or remove_button == null or clear_button == null or dispatch_button == null or recall_button == null:
+		return
+
+	var squad_name: String = str(config.get("name", squad_id))
+	var description: String = str(config.get("description", ""))
+	var max_heroes: int = int(config.get("max_heroes", 2))
+	var food_cost: int = int(config.get("food_cost", 0))
+	var status: String = str(state.get("status", "idle"))
+	var assigned_task_id: String = str(state.get("assigned_task_id", ""))
+	var acted_today: bool = bool(state.get("acted_today", false))
+	var hero_ids: Array[String] = GameState.get_squad_hero_ids(squad_id)
+	var acted_today_text: String = "未行动"
+	if acted_today:
+		acted_today_text = "已行动"
+	var task_text: String = "无"
+	if not assigned_task_id.is_empty():
+		task_text = assigned_task_id
+
+	title_label.text = squad_name
+	desc_label.text = description
+	meta_label.text = "状态：%s；补给：食物 %d；人数：%d / %d；今日行动：%s；任务：%s" % [
+		_format_squad_status(status),
+		food_cost,
+		hero_ids.size(),
+		max_heroes,
+		acted_today_text,
+		task_text
+	]
+	heroes_label.text = "成员：%s" % _format_squad_hero_names(hero_ids)
+
+	add_button.disabled = _get_next_assignable_hero_id_for_squad(squad_id).is_empty()
+	remove_button.disabled = hero_ids.is_empty()
+	clear_button.disabled = hero_ids.is_empty()
+	dispatch_button.disabled = not GameState.can_dispatch_squad(squad_id)
+	recall_button.disabled = status != "assigned"
+
+
+# 作用：响应“小队编入英雄”按钮。
+# 参数：squad_id 是目标小队 id。
+# 返回：无。当前按英雄配置顺序自动编入第一个符合条件的英雄。
+func _on_add_hero_to_squad_pressed(squad_id: String) -> void:
+	var hero_id: String = _get_next_assignable_hero_id_for_squad(squad_id)
+	if hero_id.is_empty():
+		_show_action_message("当前没有可编入该小队的英雄", false)
+		return
+
+	var success: bool = GameState.assign_hero_to_squad(hero_id, squad_id, "shelter_view_assign_squad")
+	if success:
+		var hero_config: Dictionary = DataLoader.get_hero_config(hero_id)
+		_show_action_message("%s 已编入 %s" % [
+			str(hero_config.get("name", hero_id)),
+			_get_squad_name(squad_id)
+		], true)
+	else:
+		_show_action_message("编队失败，请检查英雄状态", false)
+	_refresh_hud()
+
+
+# 作用：响应“小队移除末位英雄”按钮。
+# 参数：squad_id 是目标小队 id。
+# 返回：无。当前从该队最后一名英雄开始移除。
+func _on_remove_last_hero_from_squad_pressed(squad_id: String) -> void:
+	var hero_ids: Array[String] = GameState.get_squad_hero_ids(squad_id)
+	if hero_ids.is_empty():
+		_show_action_message("当前小队没有可移除的英雄", false)
+		return
+
+	var hero_id: String = hero_ids[hero_ids.size() - 1]
+	var success: bool = GameState.remove_hero_from_squad(hero_id, squad_id, "shelter_view_remove_squad")
+	if success:
+		var hero_config: Dictionary = DataLoader.get_hero_config(hero_id)
+		_show_action_message("%s 已移出 %s" % [
+			str(hero_config.get("name", hero_id)),
+			_get_squad_name(squad_id)
+		], true)
+	else:
+		_show_action_message("移除失败，请重试", false)
+	_refresh_hud()
+
+
+# 作用：响应“清空编队”按钮。
+# 参数：squad_id 是目标小队 id。
+# 返回：无。会清空该队全部英雄。
+func _on_clear_squad_pressed(squad_id: String) -> void:
+	var success: bool = GameState.clear_squad_heroes(squad_id, "shelter_view_clear_squad")
+	if success:
+		_show_action_message("%s 已清空编队" % _get_squad_name(squad_id), true)
+	else:
+		_show_action_message("当前小队已经为空", false)
+	_refresh_hud()
+
+
+# 作用：响应“小队出发”按钮。
+# 参数：squad_id 是目标小队 id。
+# 返回：无。D4 阶段先使用占位任务 id 标记执行中状态。
+func _on_dispatch_squad_pressed(squad_id: String) -> void:
+	var task_id: String = "manual_dispatch_%s_day_%d" % [squad_id, GameState.day]
+	var success: bool = GameState.dispatch_squad(squad_id, task_id, "shelter_view_dispatch_squad")
+	if success:
+		var food_cost: int = int(DataLoader.get_squad_config(squad_id).get("food_cost", 0))
+		_show_action_message("%s 已出发，消耗食物 %d" % [
+			_get_squad_name(squad_id),
+			food_cost
+		], true)
+	else:
+		_show_action_message("无法出发：需要已编队且食物充足，并且今天未行动", false)
+	_refresh_hud()
+
+
+# 作用：响应“小队召回”按钮。
+# 参数：squad_id 是目标小队 id。
+# 返回：无。召回后小队进入返程中，次日恢复待命。
+func _on_recall_squad_pressed(squad_id: String) -> void:
+	var success: bool = GameState.recall_squad(squad_id, "shelter_view_recall_squad")
+	if success:
+		_show_action_message("%s 已召回，状态改为返程中" % _get_squad_name(squad_id), true)
+	else:
+		_show_action_message("当前只有执行中的小队可以召回", false)
+	_refresh_hud()
 
 
 # 作用：接收建筑面板操作结果。
@@ -1095,6 +1328,56 @@ func _format_hero_specialties(specialty_tags: Array) -> String:
 # 返回：中文状态文本；未知值保留原值。
 func _format_hero_injury_state(injury_state: String) -> String:
 	return str(HERO_INJURY_STATE_NAMES.get(injury_state, injury_state))
+
+
+# 作用：把小队状态值转换成中文展示文案。
+# 参数：status 是小队运行时状态。
+# 返回：中文状态文本；未知值保留原值。
+func _format_squad_status(status: String) -> String:
+	match status:
+		"idle":
+			return "待命"
+		"assigned":
+			return "执行中"
+		"returning":
+			return "返程中"
+		_:
+			return status
+
+
+# 作用：把小队成员 id 数组转换成英雄中文名文本。
+# 参数：hero_ids 是英雄 id 数组。
+# 返回：中文名拼接结果；空数组返回“未编队”。
+func _format_squad_hero_names(hero_ids: Array[String]) -> String:
+	if hero_ids.is_empty():
+		return "未编队"
+
+	var hero_names: Array[String] = []
+	for hero_id: String in hero_ids:
+		var hero_config: Dictionary = DataLoader.get_hero_config(hero_id)
+		hero_names.append(str(hero_config.get("name", hero_id)))
+	return _join_values(hero_names)
+
+
+# 作用：获取指定小队下一个可编入的英雄 id。
+# 参数：squad_id 是小队 id。
+# 返回：找到则返回英雄 id；没有候选时返回空字符串。
+func _get_next_assignable_hero_id_for_squad(squad_id: String) -> String:
+	for hero_id: String in DataLoader.get_hero_order():
+		if GameState.can_assign_hero_to_squad(hero_id, squad_id):
+			var assigned_squad_id: String = GameState.get_hero_assigned_squad_id(hero_id)
+			if assigned_squad_id == squad_id:
+				continue
+			return hero_id
+	return ""
+
+
+# 作用：获取小队中文名。
+# 参数：squad_id 是小队 id。
+# 返回：小队中文名；缺失时返回 squad_id。
+func _get_squad_name(squad_id: String) -> String:
+	var config: Dictionary = DataLoader.get_squad_config(squad_id)
+	return str(config.get("name", squad_id))
 
 
 # 作用：刷新当前目标面板。

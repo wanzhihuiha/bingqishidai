@@ -29,6 +29,7 @@ var weather_pressure: float = DEFAULT_WEATHER_PRESSURE
 var collected_resources: Dictionary = {}
 var buildings: Dictionary = {}
 var heroes: Dictionary = {}
+var squads: Dictionary = {}
 var job_assignments: Dictionary = {}
 var assigned_jobs_total: int = 0
 var scout_state: Dictionary = {}
@@ -54,6 +55,7 @@ func start_new_game() -> void:
 	collected_resources = {}
 	buildings = _build_initial_buildings()
 	heroes = _build_initial_heroes()
+	squads = _build_initial_squads()
 	job_assignments = _build_initial_job_assignments()
 	assigned_jobs_total = 0
 	scout_state = _build_initial_scout_state()
@@ -252,6 +254,7 @@ func advance_day(source: String) -> void:
 	day += 1
 	phase = "day"
 	_reset_daily_flags(source)
+	_reset_squads_for_new_day(source)
 	print("[GameState] advance_day source=%s before=%d after=%d phase=%s" % [source, before, day, phase])
 	_update_building_unlocks_for_day(source)
 	_update_hero_unlocks_for_day(source)
@@ -696,6 +699,258 @@ func get_hero_injury_state(hero_id: String) -> String:
 	return str(state.get("injury_state", "healthy"))
 
 
+# 作用：获取指定小队运行时状态。
+# 参数：squad_id 是小队 id。
+# 返回：小队状态 Dictionary；没有时返回空字典。
+func get_squad_state(squad_id: String) -> Dictionary:
+	var state: Dictionary = squads.get(squad_id, {}) as Dictionary
+	return state.duplicate(true)
+
+
+# 作用：获取全部小队运行时状态。
+# 参数：无。
+# 返回：小队 id 到状态的深拷贝。
+func get_squad_states() -> Dictionary:
+	return squads.duplicate(true)
+
+
+# 作用：获取指定小队当前编入的英雄列表。
+# 参数：squad_id 是小队 id。
+# 返回：英雄 id 数组；缺失时返回空数组。
+func get_squad_hero_ids(squad_id: String) -> Array[String]:
+	var state: Dictionary = squads.get(squad_id, {}) as Dictionary
+	var hero_values: Array = state.get("hero_ids", []) as Array
+	var hero_ids: Array[String] = []
+	for hero_id_value: Variant in hero_values:
+		hero_ids.append(str(hero_id_value))
+	return hero_ids
+
+
+# 作用：获取指定小队当前状态。
+# 参数：squad_id 是小队 id。
+# 返回：状态字符串；缺失时返回 idle。
+func get_squad_status(squad_id: String) -> String:
+	var state: Dictionary = squads.get(squad_id, {}) as Dictionary
+	return str(state.get("status", "idle"))
+
+
+# 作用：获取指定小队当前执行的任务 id。
+# 参数：squad_id 是小队 id。
+# 返回：任务 id；没有任务时返回空字符串。
+func get_squad_assigned_task_id(squad_id: String) -> String:
+	var state: Dictionary = squads.get(squad_id, {}) as Dictionary
+	return str(state.get("assigned_task_id", ""))
+
+
+# 作用：判断指定小队今天是否已经行动过。
+# 参数：squad_id 是小队 id。
+# 返回：今天已行动返回 true，否则返回 false。
+func has_squad_acted_today(squad_id: String) -> bool:
+	var state: Dictionary = squads.get(squad_id, {}) as Dictionary
+	return bool(state.get("acted_today", false))
+
+
+# 作用：判断指定英雄是否可以加入目标小队。
+# 参数：hero_id 是英雄 id；squad_id 是小队 id。
+# 返回：满足解锁、可派遣、未在其他队且人数未满时返回 true。
+func can_assign_hero_to_squad(hero_id: String, squad_id: String) -> bool:
+	var squad_state: Dictionary = squads.get(squad_id, {}) as Dictionary
+	if not str(squad_state.get("status", "idle")) == "idle":
+		return false
+	if bool(squad_state.get("acted_today", false)):
+		return false
+
+	var hero_state: Dictionary = heroes.get(hero_id, {}) as Dictionary
+	if hero_state.is_empty():
+		return false
+	if not bool(hero_state.get("is_unlocked", false)):
+		return false
+	if not bool(hero_state.get("is_available", false)):
+		return false
+
+	var assigned_squad_id: String = str(hero_state.get("assigned_squad_id", ""))
+	if not assigned_squad_id.is_empty() and assigned_squad_id != squad_id:
+		return false
+
+	var squad_config: Dictionary = DataLoader.get_squad_config(squad_id)
+	if squad_config.is_empty():
+		return false
+	var max_heroes: int = int(squad_config.get("max_heroes", 2))
+	var hero_ids: Array[String] = get_squad_hero_ids(squad_id)
+	if hero_ids.has(hero_id):
+		return true
+	return hero_ids.size() < max_heroes
+
+
+# 作用：把英雄编入指定小队。
+# 参数：hero_id 是英雄 id；squad_id 是目标小队 id；source 是日志来源。
+# 返回：编队成功返回 true；不满足规则时返回 false。
+func assign_hero_to_squad(hero_id: String, squad_id: String, source: String) -> bool:
+	if not can_assign_hero_to_squad(hero_id, squad_id):
+		print("[GameState] assign_hero_to_squad rejected source=%s hero=%s squad=%s" % [
+			source,
+			hero_id,
+			squad_id
+		])
+		return false
+
+	var state: Dictionary = _get_or_create_squad_state(squad_id)
+	var hero_ids: Array[String] = get_squad_hero_ids(squad_id)
+	if hero_ids.has(hero_id):
+		return true
+
+	hero_ids.append(hero_id)
+	state["hero_ids"] = hero_ids
+	squads[squad_id] = state
+	set_hero_assigned_squad_id(hero_id, squad_id, source)
+	print("[GameState] assign_hero_to_squad source=%s hero=%s squad=%s hero_ids=%s" % [
+		source,
+		hero_id,
+		squad_id,
+		str(hero_ids)
+	])
+	state_changed.emit()
+	return true
+
+
+# 作用：把英雄从指定小队移除。
+# 参数：hero_id 是英雄 id；squad_id 是小队 id；source 是日志来源。
+# 返回：移除成功返回 true；英雄不在该队时返回 false。
+func remove_hero_from_squad(hero_id: String, squad_id: String, source: String) -> bool:
+	var state: Dictionary = _get_or_create_squad_state(squad_id)
+	if str(state.get("status", "idle")) != "idle":
+		return false
+	if bool(state.get("acted_today", false)):
+		return false
+	var hero_ids: Array[String] = get_squad_hero_ids(squad_id)
+	if not hero_ids.has(hero_id):
+		return false
+
+	hero_ids.erase(hero_id)
+	state["hero_ids"] = hero_ids
+	squads[squad_id] = state
+	set_hero_assigned_squad_id(hero_id, "", source)
+	print("[GameState] remove_hero_from_squad source=%s hero=%s squad=%s hero_ids=%s" % [
+		source,
+		hero_id,
+		squad_id,
+		str(hero_ids)
+	])
+	state_changed.emit()
+	return true
+
+
+# 作用：清空指定小队的编成。
+# 参数：squad_id 是小队 id；source 是日志来源。
+# 返回：是否有实际变更。
+func clear_squad_heroes(squad_id: String, source: String) -> bool:
+	var state: Dictionary = _get_or_create_squad_state(squad_id)
+	if str(state.get("status", "idle")) != "idle":
+		return false
+	if bool(state.get("acted_today", false)):
+		return false
+	var hero_ids: Array[String] = get_squad_hero_ids(squad_id)
+	if hero_ids.is_empty():
+		return false
+
+	for hero_id: String in hero_ids:
+		set_hero_assigned_squad_id(hero_id, "", source)
+	state["hero_ids"] = []
+	squads[squad_id] = state
+	print("[GameState] clear_squad_heroes source=%s squad=%s" % [
+		source,
+		squad_id
+	])
+	state_changed.emit()
+	return true
+
+
+# 作用：判断指定小队当前是否可出发。
+# 参数：squad_id 是小队 id。
+# 返回：满足待命、今天未行动、已编队且食物足够时返回 true。
+func can_dispatch_squad(squad_id: String) -> bool:
+	var squad_config: Dictionary = DataLoader.get_squad_config(squad_id)
+	if squad_config.is_empty():
+		return false
+
+	var state: Dictionary = squads.get(squad_id, {}) as Dictionary
+	var status: String = str(state.get("status", "idle"))
+	if status != "idle":
+		return false
+	if bool(state.get("acted_today", false)):
+		return false
+
+	var hero_ids: Array[String] = get_squad_hero_ids(squad_id)
+	if hero_ids.is_empty():
+		return false
+
+	for hero_id: String in hero_ids:
+		if not is_hero_available(hero_id):
+			return false
+
+	var food_cost: int = int(squad_config.get("food_cost", 0))
+	return get_resource_amount("food") >= food_cost
+
+
+# 作用：派出指定小队，扣除补给并锁定当天行动。
+# 参数：squad_id 是小队 id；task_id 是占位任务 id；source 是日志来源。
+# 返回：派出成功返回 true；条件不满足返回 false。
+func dispatch_squad(squad_id: String, task_id: String, source: String) -> bool:
+	if not can_dispatch_squad(squad_id):
+		print("[GameState] dispatch_squad rejected source=%s squad=%s" % [
+			source,
+			squad_id
+		])
+		return false
+
+	var state: Dictionary = _get_or_create_squad_state(squad_id)
+	var squad_config: Dictionary = DataLoader.get_squad_config(squad_id)
+	var food_cost: int = int(squad_config.get("food_cost", 0))
+	var hero_ids: Array[String] = get_squad_hero_ids(squad_id)
+	if food_cost > 0:
+		add_resource("food", -food_cost, source)
+
+	state["status"] = "assigned"
+	state["assigned_task_id"] = task_id
+	state["acted_today"] = true
+	squads[squad_id] = state
+
+	# D4 阶段先只按“当天已行动”处理，不在这里追加新的伤病规则。
+	for hero_id: String in hero_ids:
+		set_hero_available(hero_id, false, source)
+
+	print("[GameState] dispatch_squad source=%s squad=%s task_id=%s food_cost=%d hero_ids=%s" % [
+		source,
+		squad_id,
+		task_id,
+		food_cost,
+		str(hero_ids)
+	])
+	state_changed.emit()
+	return true
+
+
+# 作用：召回正在执行中的小队。
+# 参数：squad_id 是小队 id；source 是日志来源。
+# 返回：召回成功返回 true；不是执行中时返回 false。
+func recall_squad(squad_id: String, source: String) -> bool:
+	var state: Dictionary = _get_or_create_squad_state(squad_id)
+	var status: String = str(state.get("status", "idle"))
+	if status != "assigned":
+		return false
+
+	state["status"] = "returning"
+	state["assigned_task_id"] = ""
+	state["acted_today"] = true
+	squads[squad_id] = state
+	print("[GameState] recall_squad source=%s squad=%s" % [
+		source,
+		squad_id
+	])
+	state_changed.emit()
+	return true
+
+
 # 作用：设置指定英雄的可派遣状态。
 # 参数：hero_id 是英雄 id；is_available 是是否可派遣；source 是日志来源。
 # 返回：状态实际变化返回 true，否则返回 false。
@@ -1016,6 +1271,25 @@ func _build_initial_heroes() -> Dictionary:
 	return result
 
 
+# 作用：根据小队配置生成新游戏初始小队状态。
+# 参数：无。
+# 返回：小队 id 到运行时状态的 Dictionary。
+func _build_initial_squads() -> Dictionary:
+	var result: Dictionary = {}
+	var configs: Dictionary = DataLoader.get_squad_configs()
+
+	for squad_id_value: Variant in configs.keys():
+		var squad_id: String = str(squad_id_value)
+		result[squad_id] = {
+			"hero_ids": [],
+			"status": "idle",
+			"assigned_task_id": "",
+			"acted_today": false
+		}
+
+	return result
+
+
 # 作用：生成新游戏初始岗位分配。
 # 参数：无。
 # 返回：岗位 id 到人数的 Dictionary，所有岗位初始为 0。
@@ -1092,6 +1366,37 @@ func _reset_daily_flags(source: String) -> void:
 	print("[GameState] reset_daily_flags source=%s flags=%s" % [source, str(daily_flags)])
 
 
+# 作用：推进到新一天时重置小队执行状态和英雄可派遣状态。
+# 参数：source 是日志来源。
+# 返回：无。会把 assigned / returning 统一恢复为 idle，并清空任务占位。
+func _reset_squads_for_new_day(source: String) -> void:
+	var squad_order: Array[String] = DataLoader.get_squad_order()
+	for squad_id: String in squad_order:
+		var state: Dictionary = _get_or_create_squad_state(squad_id)
+		var hero_ids: Array[String] = get_squad_hero_ids(squad_id)
+		var before_status: String = str(state.get("status", "idle"))
+		var before_task_id: String = str(state.get("assigned_task_id", ""))
+		var before_acted_today: bool = bool(state.get("acted_today", false))
+
+		state["status"] = "idle"
+		state["assigned_task_id"] = ""
+		state["acted_today"] = false
+		squads[squad_id] = state
+
+		for hero_id: String in hero_ids:
+			if is_hero_unlocked(hero_id):
+				set_hero_available(hero_id, true, "reset_squads_for_new_day")
+
+		if before_status != "idle" or not before_task_id.is_empty() or before_acted_today:
+			print("[GameState] reset_squad_for_new_day source=%s squad=%s before_status=%s before_task_id=%s before_acted_today=%s" % [
+				source,
+				squad_id,
+				before_status,
+				before_task_id,
+				str(before_acted_today)
+			])
+
+
 # 作用：获取指定建筑状态，如果不存在则创建默认状态。
 # 参数：building_id 是建筑 id。
 # 返回：建筑运行时状态 Dictionary。
@@ -1117,6 +1422,21 @@ func _get_or_create_hero_state(hero_id: String) -> Dictionary:
 			"is_available": false,
 			"assigned_squad_id": "",
 			"injury_state": "healthy"
+		}
+	return state
+
+
+# 作用：获取指定小队状态，如果不存在则创建默认状态。
+# 参数：squad_id 是小队 id。
+# 返回：小队运行时状态 Dictionary。
+func _get_or_create_squad_state(squad_id: String) -> Dictionary:
+	var state: Dictionary = squads.get(squad_id, {}) as Dictionary
+	if state.is_empty():
+		state = {
+			"hero_ids": [],
+			"status": "idle",
+			"assigned_task_id": "",
+			"acted_today": false
 		}
 	return state
 

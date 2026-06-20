@@ -5,6 +5,7 @@ const SURVIVORS_PATH: String = "res://data/survivors.json"
 const JOBS_PATH: String = "res://data/jobs.json"
 const BUILDINGS_PATH: String = "res://data/buildings.json"
 const HEROES_PATH: String = "res://data/heroes.json"
+const SQUADS_PATH: String = "res://data/squads.json"
 const QUESTS_PATH: String = "res://data/quests.json"
 const REGIONS_PATH: String = "res://data/regions.json"
 const EVENTS_PATH: String = "res://data/events.json"
@@ -18,6 +19,8 @@ var building_configs: Dictionary = {}
 var building_order: Array[String] = []
 var hero_configs: Dictionary = {}
 var hero_order: Array[String] = []
+var squad_configs: Dictionary = {}
+var squad_order: Array[String] = []
 var quest_configs: Dictionary = {}
 var quest_order: Array[String] = []
 var region_configs: Dictionary = {}
@@ -41,15 +44,17 @@ func load_all() -> void:
 	job_configs = _load_job_configs()
 	building_configs = _load_building_configs()
 	hero_configs = _load_hero_configs()
+	squad_configs = _load_squad_configs()
 	quest_configs = _load_quest_configs()
 	region_configs = _load_region_configs()
 	event_configs = _load_event_configs()
-	print("[DataLoader] load_all resources=%d survivor_config=%s jobs=%d buildings=%d heroes=%d quests=%d events=%d" % [
+	print("[DataLoader] load_all resources=%d survivor_config=%s jobs=%d buildings=%d heroes=%d squads=%d quests=%d events=%d" % [
 		resource_configs.size(),
 		str(not survivor_config.is_empty()),
 		job_configs.size(),
 		building_configs.size(),
 		hero_configs.size(),
+		squad_configs.size(),
 		quest_configs.size(),
 		event_configs.size()
 	])
@@ -155,6 +160,28 @@ func get_hero_order() -> Array[String]:
 # 返回：英雄配置 Dictionary；找不到时返回空字典。
 func get_hero_config(hero_id: String) -> Dictionary:
 	var config: Dictionary = hero_configs.get(hero_id, {}) as Dictionary
+	return config.duplicate(true)
+
+
+# 作用：获取所有小队静态配置的深拷贝。
+# 参数：无。
+# 返回：小队 id 到小队配置 Dictionary 的映射。
+func get_squad_configs() -> Dictionary:
+	return squad_configs.duplicate(true)
+
+
+# 作用：获取小队显示顺序。
+# 参数：无。
+# 返回：按 JSON 顺序整理好的小队 id 数组。
+func get_squad_order() -> Array[String]:
+	return squad_order.duplicate()
+
+
+# 作用：按小队 id 获取单个小队配置。
+# 参数：squad_id 是小队 id，例如 pioneer_team。
+# 返回：小队配置 Dictionary；找不到时返回空字典。
+func get_squad_config(squad_id: String) -> Dictionary:
+	var config: Dictionary = squad_configs.get(squad_id, {}) as Dictionary
 	return config.duplicate(true)
 
 
@@ -351,6 +378,36 @@ func _load_hero_configs() -> Dictionary:
 		hero_order.append(hero_id)
 
 	print("[DataLoader] load_heroes count=%d order=%s" % [result.size(), str(hero_order)])
+	return result
+
+
+# 作用：从 squads.json 加载小队配置，并建立小队顺序。
+# 参数：无。
+# 返回：小队 id 到小队配置的 Dictionary；非法条目会被跳过。
+func _load_squad_configs() -> Dictionary:
+	squad_order.clear()
+	var data: Dictionary = _load_json_dictionary(SQUADS_PATH)
+	var items: Array = data.get("items", []) as Array
+	var result: Dictionary = {}
+
+	for item_value: Variant in items:
+		if typeof(item_value) != TYPE_DICTIONARY:
+			push_error("[DataLoader] squads item is not dictionary")
+			continue
+
+		var item: Dictionary = item_value as Dictionary
+		var squad_id: String = str(item.get("id", ""))
+		if squad_id.is_empty():
+			push_error("[DataLoader] squads item missing id")
+			continue
+		if result.has(squad_id):
+			push_error("[DataLoader] duplicated squad id=%s" % squad_id)
+			continue
+
+		result[squad_id] = item.duplicate(true)
+		squad_order.append(squad_id)
+
+	print("[DataLoader] load_squads count=%d order=%s" % [result.size(), str(squad_order)])
 	return result
 
 
