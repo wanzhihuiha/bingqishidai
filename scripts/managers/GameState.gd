@@ -277,6 +277,28 @@ func was_resource_collected(resource_id: String) -> bool:
 	return bool(collected_resources.get(resource_id, false))
 
 
+# 作用：判断某种资源今天是否已经收取过。
+# 参数：resource_id 是资源 id。
+# 返回：今天已收取过返回 true，否则返回 false。
+func was_resource_collected_today(resource_id: String) -> bool:
+	var collected_today: Dictionary = daily_flags.get("resource_collected_today", {}) as Dictionary
+	return bool(collected_today.get(resource_id, false))
+
+
+# 作用：标记某种资源今天已经收取过一次。
+# 参数：resource_id 是资源 id；source 是日志来源。
+# 返回：无。用于限制每个资源点每天只能收取一次。
+func mark_resource_collected_today(resource_id: String, source: String) -> void:
+	var collected_today: Dictionary = daily_flags.get("resource_collected_today", {}) as Dictionary
+	collected_today[resource_id] = true
+	daily_flags["resource_collected_today"] = collected_today
+	print("[GameState] mark_resource_collected_today source=%s resource=%s" % [
+		source,
+		resource_id
+	])
+	state_changed.emit()
+
+
 # 作用：把指定建筑标记为已建造。
 # 参数：building_id 是建筑 id；source 是日志来源。
 # 返回：如果本次从未建造变为已建造返回 true；原本已建造返回 false。
@@ -448,9 +470,9 @@ func has_event_been_resolved(event_id: String) -> bool:
 
 # 作用：获取下一次允许检查随机事件的天数。
 # 参数：无。
-# 返回：天数整数；缺失时默认第 2 天。
+# 返回：天数整数；缺失时默认第 4 天。
 func get_next_event_check_day() -> int:
-	return int(event_history.get("next_check_day", 2))
+	return int(event_history.get("next_check_day", 4))
 
 
 # 作用：设置下一次随机事件检查日。
@@ -919,7 +941,8 @@ func _build_initial_quests() -> Dictionary:
 func _build_initial_daily_flags() -> Dictionary:
 	return {
 		"building_upgraded": false,
-		"event_resolved": false
+		"event_resolved": false,
+		"resource_collected_today": {}
 	}
 
 
@@ -930,7 +953,7 @@ func _build_initial_event_history() -> Dictionary:
 	return {
 		"resolved_events": {},
 		"cooldowns": {},
-		"next_check_day": 2
+		"next_check_day": 4
 	}
 
 

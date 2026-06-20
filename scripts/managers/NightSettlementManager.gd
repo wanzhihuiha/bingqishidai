@@ -144,6 +144,18 @@ func settle_night() -> Dictionary:
 			"delta": morale_after - morale_before,
 			"reasons": morale_reasons
 		},
+		"cost_summary": _build_cost_summary(
+			base_food_need,
+			food_need,
+			food_paid,
+			food_shortage,
+			food_saved,
+			base_coal_need,
+			coal_need,
+			coal_paid,
+			coal_shortage,
+			coal_saved
+		),
 		"jobs": {
 			"production": job_production,
 			"medical": medical_result
@@ -240,23 +252,6 @@ func _build_display_lines(result: Dictionary) -> Array[String]:
 
 	var lines: Array[String] = []
 	lines.append("岗位产出：%s" % _join_string_array(production_lines, "无"))
-	lines.append("食物消耗：基础需要 %d，厨师节省 %d，实际需要 %d，已消耗 %d，缺口 %d，剩余 %d" % [
-		int(food.get("base_need", 0)),
-		int(food.get("saved", 0)),
-		int(food.get("need", 0)),
-		int(food.get("paid", 0)),
-		int(food.get("shortage", 0)),
-		int(food.get("after", 0))
-	])
-	lines.append("煤炭消耗：寒炉 %d 级，基础需要 %d，工程维护节省 %d，实际需要 %d，已消耗 %d，缺口 %d，剩余 %d" % [
-		GameState.furnace_level,
-		int(coal.get("base_need", 0)),
-		int(coal.get("saved", 0)),
-		int(coal.get("need", 0)),
-		int(coal.get("paid", 0)),
-		int(coal.get("shortage", 0)),
-		int(coal.get("after", 0))
-	])
 	lines.append("温度结果：%d（%s）" % [
 		int(temperature.get("score", 0)),
 		str(temperature.get("status", "未知"))
@@ -325,3 +320,85 @@ func _get_furnace_coal_need() -> int:
 	if configured_need > 0:
 		return configured_need
 	return GameState.furnace_level * COAL_COST_PER_FURNACE_LEVEL
+
+
+# 作用：构建夜晚消耗表格使用的结构化数据。
+# 参数：食物和煤炭相关的基础需求、结算需求、实际支付、缺口与节省数值。
+# 返回：包含食物和煤炭两行的数组，每行都带有表格展示所需的文本字段。
+func _build_cost_summary(
+	base_food_need: int,
+	food_need: int,
+	food_paid: int,
+	food_shortage: int,
+	food_saved: int,
+	base_coal_need: int,
+	coal_need: int,
+	coal_paid: int,
+	coal_shortage: int,
+	coal_saved: int
+) -> Array[Dictionary]:
+	var rows: Array[Dictionary] = []
+	rows.append(_build_cost_summary_row(
+		"食物",
+		base_food_need,
+		food_need,
+		food_paid,
+		food_shortage,
+		food_saved,
+		_get_cost_source_text("food", food_saved)
+	))
+	rows.append(_build_cost_summary_row(
+		"煤炭",
+		base_coal_need,
+		coal_need,
+		coal_paid,
+		coal_shortage,
+		coal_saved,
+		_get_cost_source_text("coal", coal_saved)
+	))
+	return rows
+
+
+# 作用：构建单行夜晚消耗表格数据。
+# 参数：item_name 是项目名；base_cost 是基础消耗；settled_cost 是结算后需求；paid_cost 是实际支付；shortage 是缺口；saved_cost 是节省量；source_text 是节省来源。
+# 返回：用于 UI 表格展示的 Dictionary。
+func _build_cost_summary_row(
+	item_name: String,
+	base_cost: int,
+	settled_cost: int,
+	paid_cost: int,
+	shortage: int,
+	saved_cost: int,
+	source_text: String
+) -> Dictionary:
+	var note_parts: PackedStringArray = PackedStringArray()
+	if not source_text.is_empty():
+		note_parts.append(source_text)
+	if shortage > 0:
+		note_parts.append("缺口 %d，实际支付 %d" % [shortage, paid_cost])
+	elif paid_cost != settled_cost:
+		note_parts.append("实际支付 %d" % paid_cost)
+	if note_parts.is_empty():
+		note_parts.append("无")
+	return {
+		"item": item_name,
+		"base_text": str(base_cost),
+		"actual_text": str(settled_cost),
+		"saved_text": str(saved_cost),
+		"source_text": "；".join(note_parts)
+	}
+
+
+# 作用：生成夜晚消耗表格中的节省来源文本。
+# 参数：resource_id 是资源 id；saved_cost 是节省量。
+# 返回：中文来源文本；没有节省时返回“无”。
+func _get_cost_source_text(resource_id: String, saved_cost: int) -> String:
+	if saved_cost <= 0:
+		return "无节省"
+	match resource_id:
+		"food":
+			return "厨房节省 %d" % saved_cost
+		"coal":
+			return "工程维护节省 %d" % saved_cost
+		_:
+			return "系统修正节省 %d" % saved_cost

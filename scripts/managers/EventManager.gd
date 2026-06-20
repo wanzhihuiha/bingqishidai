@@ -3,6 +3,9 @@ extends Node
 const EVENT_TRIGGER_CHANCE: float = 0.8
 const MIN_CHECK_INTERVAL_DAYS: int = 2
 const MAX_CHECK_INTERVAL_DAYS: int = 3
+const INTRO_EVENT_ID: String = "child_fever_early"
+const INTRO_EVENT_FIRST_DAY: int = 4
+const INTRO_EVENT_LAST_DAY: int = 5
 
 
 # 作用：尝试获取今天应该弹出的随机事件。
@@ -12,6 +15,8 @@ func get_pending_event() -> Dictionary:
 	GameState.ensure_started()
 	if GameState.was_event_resolved_today():
 		return {}
+	if GameState.day >= INTRO_EVENT_FIRST_DAY and GameState.day <= INTRO_EVENT_LAST_DAY and not GameState.has_event_been_resolved(INTRO_EVENT_ID):
+		return DataLoader.get_event_config(INTRO_EVENT_ID)
 	if GameState.day < GameState.get_next_event_check_day():
 		return {}
 	if randf() > EVENT_TRIGGER_CHANCE:

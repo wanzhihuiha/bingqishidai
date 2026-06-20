@@ -193,13 +193,13 @@
             "wood": 10
           },
           "production": {
-            "food_save_rate": 0.05
+            "food_save_rate": 0.1
           },
           "unlocks": [
             "food_efficiency"
           ],
           "effects": [],
-          "display_text": "略微降低夜晚食物消耗。"
+          "display_text": "明显降低夜晚食物消耗。"
         },
         {
           "level": 2,
@@ -208,11 +208,11 @@
             "parts": 4
           },
           "production": {
-            "food_save_rate": 0.1
+            "food_save_rate": 0.2
           },
           "unlocks": [],
           "effects": [],
-          "display_text": "继续降低食物消耗。"
+          "display_text": "进一步降低夜晚食物消耗。"
         },
         {
           "level": 3,
@@ -221,7 +221,7 @@
             "parts": 8
           },
           "production": {
-            "food_save_rate": 0.15
+            "food_save_rate": 0.3
           },
           "unlocks": [],
           "effects": [
@@ -232,7 +232,7 @@
               "note": "稳定热食提升营地士气。"
             }
           ],
-          "display_text": "显著降低食物压力，并稳定士气。"
+          "display_text": "大幅降低食物压力，并稳定士气。"
         }
       ],
       "description": "提升食物利用率，减轻夜晚消耗压力。"

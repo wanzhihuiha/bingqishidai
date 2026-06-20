@@ -10,7 +10,6 @@ const RESOURCE_NAMES: Dictionary = {
 	"hope": "希望值"
 }
 const JOB_ORDER: Array[String] = ["worker", "hunter", "cook", "medic", "engineer"]
-const COLLECT_COOLDOWN_SECONDS: float = 10.0
 const NIGHT_SETTLEMENT_POPUP_SCRIPT: Script = preload("res://scripts/ui/NightSettlementPopup.gd")
 const EVENT_POPUP_SCRIPT: Script = preload("res://scripts/ui/EventPopup.gd")
 const BUILDING_PANEL_SCRIPT: Script = preload("res://scripts/shelter/BuildingPanel.gd")
@@ -67,7 +66,6 @@ var job_preview_labels: Dictionary = {}
 # 返回：无。
 func _ready() -> void:
 	print("[ShelterView] ready")
-	set_process(true)
 	GameState.ensure_started()
 	if not GameState.state_changed.is_connected(_refresh_hud):
 		GameState.state_changed.connect(_refresh_hud)
@@ -79,13 +77,6 @@ func _ready() -> void:
 		GameState.quest_relevant_state_changed.connect(_refresh_quest_panel)
 	_build_ui()
 	_refresh_hud()
-
-
-# 作用：Godot 每帧回调；用于推进资源收取按钮的冷却倒计时。
-# 参数：delta 是距离上一帧经过的秒数。
-# 返回：无。
-func _process(delta: float) -> void:
-	_update_collect_cooldowns(delta)
 
 
 # 作用：动态创建避难所主界面。
@@ -398,27 +389,18 @@ func _make_collect_card(config: Dictionary) -> PanelContainer:
 	button.pressed.connect(_on_collect_pressed.bind(resource_id, amount))
 	collect_cards[resource_id] = {
 		"button": button,
-		"status": status,
-		"cooldown_left": 0.0
+		"status": status
 	}
 
 	return panel
 
 
-# 作用：推进所有资源收取卡片的冷却时间。
-# 参数：delta 是距离上一帧经过的秒数。
-# 返回：无。冷却变化后会刷新对应卡片按钮状态。
-func _update_collect_cooldowns(delta: float) -> void:
+# 作用：刷新所有资源收取卡片的按钮状态。
+# 参数：无。
+# 返回：无。会根据是否已在今天收取过来禁用按钮。
+func _update_collect_cooldowns() -> void:
 	for resource_id_value: Variant in collect_cards.keys():
 		var resource_id: String = str(resource_id_value)
-		var card: Dictionary = collect_cards.get(resource_id, {}) as Dictionary
-		var cooldown_left: float = float(card.get("cooldown_left", 0.0))
-		if cooldown_left <= 0.0:
-			continue
-
-		cooldown_left = max(0.0, cooldown_left - delta)
-		card["cooldown_left"] = cooldown_left
-		collect_cards[resource_id] = card
 		_refresh_collect_card(resource_id)
 
 
@@ -429,13 +411,12 @@ func _refresh_collect_card(resource_id: String) -> void:
 	var card: Dictionary = collect_cards.get(resource_id, {}) as Dictionary
 	var button: Button = card.get("button") as Button
 	var status: Label = card.get("status") as Label
-	var cooldown_left: float = float(card.get("cooldown_left", 0.0))
 	if button == null or status == null:
 		return
 
-	if cooldown_left > 0.0:
+	if GameState.was_resource_collected_today(resource_id):
 		button.disabled = true
-		status.text = "冷却中：%.1f 秒" % cooldown_left
+		status.text = "今天已收取"
 		return
 
 	button.disabled = false
@@ -449,18 +430,15 @@ func _refresh_collect_card(resource_id: String) -> void:
 # 参数：resource_id 是资源 id；amount 是本次收取数量。
 # 返回：无。成功收取后会增加资源、标记首次收取、进入冷却并播放反馈。
 func _on_collect_pressed(resource_id: String, amount: int) -> void:
-	var card: Dictionary = collect_cards.get(resource_id, {}) as Dictionary
-	var cooldown_left: float = float(card.get("cooldown_left", 0.0))
-	if cooldown_left > 0.0:
+	if GameState.was_resource_collected_today(resource_id):
 		return
 
 	var before: int = GameState.get_resource_amount(resource_id)
 	GameState.add_resource(resource_id, amount, "collect_resource")
 	GameState.mark_resource_collected(resource_id, "collect_resource")
+	GameState.mark_resource_collected_today(resource_id, "collect_resource")
 	var after: int = GameState.get_resource_amount(resource_id)
 	print("collect_resource resource_id=%s amount=%d before=%d after=%d" % [resource_id, amount, before, after])
-	card["cooldown_left"] = COLLECT_COOLDOWN_SECONDS
-	collect_cards[resource_id] = card
 	_refresh_collect_card(resource_id)
 	_play_collect_feedback(resource_id, amount)
 
@@ -650,6 +628,8 @@ func _refresh_hud() -> void:
 	if day_label != null:
 		day_label.text = "第 %d 天" % GameState.day
 
+	_update_collect_cooldowns()
+
 	# 资源栏按创建时记录的 resource_labels 刷新，显示名称来自 DataLoader 配置。
 	for resource_id_value: Variant in resource_labels.keys():
 		var resource_id: String = str(resource_id_value)
@@ -716,7 +696,7 @@ func _on_end_day_confirmed() -> void:
 func _on_squad_pressed() -> void:
 	print("[ShelterView] button=hero_squad")
 	if not BuildingManager.can_show_feature_unlocked("hero_squad"):
-		_show_action_message("训练场 1 级解锁英雄小队入口", false)
+		_show_action_message("训练场 1 级后，点右侧建筑状态里的训练场查看英雄小队入口", false)
 		return
 	_show_action_message("英雄小队入口已解锁，正式编队功能将在后续章节接入。", true)
 

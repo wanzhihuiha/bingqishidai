@@ -98,6 +98,31 @@
         }
       ],
       "next_quest_ids": [
+        "guide_build_medical_tent"
+      ]
+    },
+    {
+      "id": "guide_build_medical_tent",
+      "type": "guide",
+      "title": "建造医务帐",
+      "description": "建造医务帐，让玩家学会治疗伤病和观察健康状态。",
+      "unlock_day": 1,
+      "conditions": {},
+      "target": {
+        "type": "building_built",
+        "building_id": "medical_tent",
+        "value": 1,
+        "progress_text": "医务帐建造"
+      },
+      "rewards": [
+        {
+          "effect_type": "resource_delta",
+          "target_id": "hope",
+          "value": 2,
+          "note": "医护体系开始稳定。"
+        }
+      ],
+      "next_quest_ids": [
         "guide_assign_three_jobs"
       ]
     },
@@ -129,7 +154,7 @@
       "id": "guide_unlock_training_ground",
       "type": "guide",
       "title": "解锁训练场",
-      "description": "完成前期安排后，解锁训练场，为后续小队行动做准备。",
+      "description": "第 8 天解锁训练场后，优先完成这一步，为后续小队行动做准备。",
       "unlock_day": 1,
       "conditions": {},
       "target": {
@@ -154,7 +179,7 @@
       "id": "guide_send_first_scout_team",
       "type": "guide",
       "title": "派出第一支侦察队",
-      "description": "派出一支侦察队，准备接触营地外的冰原区域。",
+      "description": "从冰原地图页派出一支侦察队，准备接触营地外的冰原区域。",
       "unlock_day": 1,
       "conditions": {},
       "target": {
@@ -178,7 +203,7 @@
       "id": "guide_scout_first_region",
       "type": "guide",
       "title": "侦察第一个冰原区域",
-      "description": "侦察断松林，确认营地外第一处资源区域。",
+      "description": "在冰原地图页侦察断松林，确认营地外第一处资源区域。",
       "unlock_day": 1,
       "conditions": {},
       "target": {
