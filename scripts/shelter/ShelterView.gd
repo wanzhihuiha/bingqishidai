@@ -28,6 +28,7 @@ const HERO_INJURY_STATE_NAMES: Dictionary = {
 const JOB_ORDER: Array[String] = ["worker", "hunter", "cook", "medic", "engineer"]
 const NIGHT_SETTLEMENT_POPUP_SCRIPT: Script = preload("res://scripts/ui/NightSettlementPopup.gd")
 const EVENT_POPUP_SCRIPT: Script = preload("res://scripts/ui/EventPopup.gd")
+const BATTLE_REPORT_PANEL_SCRIPT: Script = preload("res://scripts/battle/BattleReportPanel.gd")
 const BUILDING_PANEL_SCRIPT: Script = preload("res://scripts/shelter/BuildingPanel.gd")
 const EXPEDITION_MANAGER_SCRIPT: Script = preload("res://scripts/managers/ExpeditionManager.gd")
 const COLLECT_BUILDINGS: Array[Dictionary] = [
@@ -85,6 +86,7 @@ var expedition_empty_label: Label
 var expedition_rows: Dictionary = {}
 var expedition_selected_squad_id: String = ""
 var expedition_selected_id: String = ""
+var pending_battle_reports: Array[Dictionary] = []
 var job_total_label: Label
 var job_assignable_label: Label
 var job_rows: Dictionary = {}
@@ -981,6 +983,8 @@ func _on_end_day_pressed() -> void:
 func _on_end_day_confirmed() -> void:
 	print("[ShelterView] confirm=end_day")
 	var result: Dictionary = NightSettlementManager.settle_night()
+	var expeditions: Dictionary = result.get("expeditions", {}) as Dictionary
+	pending_battle_reports = _extract_battle_results(expeditions.get("results", []))
 	_refresh_hud()
 	_show_night_settlement_popup(result)
 
@@ -1351,8 +1355,36 @@ func _show_night_settlement_popup(result: Dictionary) -> void:
 
 # 作用：响应夜晚结算弹窗的继续信号。
 # 参数：无。
-# 返回：无。会尝试展示当天事件。
+# 返回：无。会先展示自动战斗战报，再尝试展示当天事件。
 func _on_night_settlement_popup_continued() -> void:
+	if not pending_battle_reports.is_empty():
+		_show_battle_report_panel(pending_battle_reports)
+		pending_battle_reports = []
+		return
+	_try_show_daily_event()
+
+
+# 作用：显示自动战斗战报面板。
+# 参数：battle_results 是当天探险结算结果数组。
+# 返回：无。
+func _show_battle_report_panel(battle_results: Array[Dictionary]) -> void:
+	var panel: CanvasLayer = BATTLE_REPORT_PANEL_SCRIPT.new() as CanvasLayer
+	if panel == null:
+		push_error("[ShelterView] failed to create battle report panel")
+		_try_show_daily_event()
+		return
+
+	add_child(panel)
+	if panel.has_signal("closed"):
+		panel.connect("closed", _on_battle_report_panel_closed)
+	if panel.has_method("show_reports"):
+		panel.call("show_reports", battle_results)
+
+
+# 作用：响应自动战斗战报关闭。
+# 参数：无。
+# 返回：无。继续进入每日事件。
+func _on_battle_report_panel_closed() -> void:
 	_try_show_daily_event()
 
 
@@ -1650,6 +1682,25 @@ func _refresh_report_panel() -> void:
 			label.text = reports[index]
 		else:
 			label.text = "暂无日志"
+
+
+# 作用：从夜晚结算结果中过滤出需要展示的自动战斗战报。
+# 参数：results_value 是当天探险结算结果数组。
+# 返回：只保留带 report_lines 的结果数组。
+func _extract_battle_results(results_value: Variant) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	if typeof(results_value) != TYPE_ARRAY:
+		return result
+	var raw_results: Array = results_value as Array
+	for item_value: Variant in raw_results:
+		if typeof(item_value) != TYPE_DICTIONARY:
+			continue
+		var item: Dictionary = item_value as Dictionary
+		var report_lines: Array = item.get("report_lines", []) as Array
+		if report_lines.is_empty():
+			continue
+		result.append(item.duplicate(true))
+	return result
 
 
 # 作用：显示底部操作提示。

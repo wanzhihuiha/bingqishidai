@@ -39,9 +39,17 @@ func get_reward_preview_text(expedition_id: String) -> String:
 		var target_id: String = str(reward.get("target_id", ""))
 		match effect_type:
 			"resource_delta":
-				parts.append("%s 变化" % GameState.get_resource_name(target_id))
+				parts.append("%s +%d" % [
+					GameState.get_resource_name(target_id),
+					int(reward.get("value", 0))
+				])
 			"state_change":
-				parts.append("状态变化")
+				if target_id == "region.is_scouted":
+					parts.append("解锁区域详情")
+				elif target_id == "region_owner":
+					parts.append("夺回区域控制")
+				else:
+					parts.append("状态变化")
 			"beacon_delta":
 				if target_id == "intel_count":
 					parts.append("获得情报")
@@ -57,12 +65,16 @@ func get_reward_preview_text(expedition_id: String) -> String:
 # 返回：中文风险概述。
 func get_risk_preview_text(expedition_id: String) -> String:
 	var config: Dictionary = DataLoader.get_expedition_config(expedition_id)
-	var required_tags: Array = config.get("required_tags", []) as Array
-	if required_tags.has("guard"):
-		return "有战斗风险"
-	if required_tags.has("medical") or required_tags.has("rescue"):
-		return "有伤病风险"
-	return "风险中等"
+	var target_region_id: String = str(config.get("target_region_id", ""))
+	var region_danger: int = GameState.get_region_danger_level(target_region_id)
+	var region_owner: String = GameState.get_region_owner(target_region_id)
+	if str(config.get("type", "")) == "scout" and region_danger <= 1 and region_owner != "enemy" and region_owner != "contested":
+		return "低危险侦察，不触发战斗"
+	if region_danger >= 4:
+		return "高危险区域，战斗和受伤风险较高"
+	if region_danger >= 2:
+		return "有一定战斗风险"
+	return "风险较低"
 
 
 # 作用：派遣小队执行探险。
@@ -100,53 +112,61 @@ func resolve_end_of_day_expeditions() -> Array[Dictionary]:
 func _apply_expedition_result(expedition_id: String, result: Dictionary) -> void:
 	var config: Dictionary = DataLoader.get_expedition_config(expedition_id)
 	var rewards: Array = config.get("rewards", []) as Array
-	var outcome_multiplier: float = float(result.get("reward_multiplier", 0.0))
-	var injury_chance: float = float(result.get("injury_chance", 0.0))
-	var extra_resource_rewards: Dictionary = result.get("extra_resource_rewards", {}) as Dictionary
+	var final_resource_reward: Dictionary = result.get("resource_reward", {}) as Dictionary
+	var wounds: int = int(result.get("wounds", 0))
 	var hope_delta: int = int(result.get("hope_delta", 0))
 	if hope_delta != 0:
 		GameState.add_resource("hope", hope_delta, "expedition_result")
 
-	for reward_value: Variant in rewards:
-		if typeof(reward_value) != TYPE_DICTIONARY:
-			continue
-		var reward: Dictionary = reward_value as Dictionary
-		var effect_type: String = str(reward.get("effect_type", ""))
-		var target_id: String = str(reward.get("target_id", ""))
-		var base_value: Variant = reward.get("value", 0)
-		match effect_type:
-			"resource_delta":
-				var amount: int = int(round(float(base_value) * outcome_multiplier))
-				amount += int(extra_resource_rewards.get(target_id, 0))
-				if amount != 0:
-					GameState.add_resource(target_id, amount, "expedition_result")
-			"state_change":
-				if target_id == "region_owner":
-					var region_id: String = str(config.get("target_region_id", ""))
-					GameState.set_region_owner(region_id, "player", "expedition_result")
-				elif target_id == "region.is_scouted":
-					var region_id_2: String = str(config.get("target_region_id", ""))
-					GameState.scout_region(region_id_2, "expedition_result")
-			"beacon_delta":
-				if target_id == "intel_count":
-					GameState.set_beacon_value("intel_count", int(GameState.get_beacon_state().get("intel_count", 0)) + int(base_value), "expedition_result")
-				elif target_id == "repair_progress":
-					GameState.set_beacon_value("repair_progress", int(GameState.get_beacon_state().get("repair_progress", 0)) + int(base_value), "expedition_result")
-			_:
-				push_error("[ExpeditionManager] unsupported reward effect_type=%s expedition=%s" % [effect_type, expedition_id])
+	for resource_id_value: Variant in final_resource_reward.keys():
+		var resource_id: String = str(resource_id_value)
+		var amount: int = int(final_resource_reward.get(resource_id, 0))
+		if amount != 0:
+			GameState.add_resource(resource_id, amount, "expedition_result")
 
-	_apply_expedition_injury(expedition_id, injury_chance)
+	var victory: bool = bool(result.get("victory", false))
+	if victory:
+		for reward_value: Variant in rewards:
+			if typeof(reward_value) != TYPE_DICTIONARY:
+				continue
+			var reward: Dictionary = reward_value as Dictionary
+			var effect_type: String = str(reward.get("effect_type", ""))
+			var target_id: String = str(reward.get("target_id", ""))
+			var base_value: Variant = reward.get("value", 0)
+			match effect_type:
+				"resource_delta":
+					pass
+				"state_change":
+					if target_id == "region_owner":
+						var region_id: String = str(config.get("target_region_id", ""))
+						GameState.set_region_owner(region_id, "player", "expedition_result")
+					elif target_id == "region.is_scouted":
+						var region_id_2: String = str(config.get("target_region_id", ""))
+						GameState.scout_region(region_id_2, "expedition_result")
+				"beacon_delta":
+					if target_id == "intel_count":
+						GameState.set_beacon_value("intel_count", int(GameState.get_beacon_state().get("intel_count", 0)) + int(base_value), "expedition_result")
+					elif target_id == "repair_progress":
+						GameState.set_beacon_value("repair_progress", int(GameState.get_beacon_state().get("repair_progress", 0)) + int(base_value), "expedition_result")
+				_:
+					push_error("[ExpeditionManager] unsupported reward effect_type=%s expedition=%s" % [effect_type, expedition_id])
+
+	_apply_expedition_wounds(expedition_id, wounds)
 
 
-# 作用：根据结果档位给英雄追加轻伤风险。
-# 参数：expedition_id 是探险模板 id；injury_chance 是受伤概率。
+# 作用：根据受伤人数给本次探险的小队成员追加轻伤状态。
+# 参数：expedition_id 是探险模板 id；wounds 是本次受伤人数。
 # 返回：无。
-func _apply_expedition_injury(expedition_id: String, injury_chance: float) -> void:
-	if injury_chance <= 0.0:
+func _apply_expedition_wounds(expedition_id: String, wounds: int) -> void:
+	if wounds <= 0:
 		return
 	var state: Dictionary = GameState.get_expedition_state(expedition_id)
 	var squad_id: String = str(state.get("squad_id", ""))
 	var hero_ids: Array[String] = GameState.get_squad_hero_ids(squad_id)
+	var applied_count: int = 0
 	for hero_id: String in hero_ids:
-		if randf() <= injury_chance:
+		if applied_count >= wounds:
+			break
+		if GameState.get_hero_injury_state(hero_id) == "healthy":
 			GameState.set_hero_injury_state(hero_id, "light_wound", "expedition_injury")
+			applied_count += 1

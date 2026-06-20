@@ -1,6 +1,7 @@
 extends Control
 
 const GAME_TITLE: String = "冰汽时代"
+const BATTLE_VERIFIER_SCRIPT: Script = preload("res://scripts/dev/BattleResolverVerifier.gd")
 
 
 # 作用：Godot 自动回调；主菜单场景加载完成后构建界面。
@@ -8,6 +9,8 @@ const GAME_TITLE: String = "冰汽时代"
 # 返回：无。
 func _ready() -> void:
 	print("[MainMenu] ready")
+	if _try_run_dev_verifier():
+		return
 	_build_ui()
 
 
@@ -49,6 +52,24 @@ func _build_ui() -> void:
 	var exit_button: Button = _make_menu_button("退出")
 	exit_button.pressed.connect(_on_exit_pressed)
 	layout.add_child(exit_button)
+
+
+# 作用：在命令行带上调试参数时，直接运行自动战斗验证脚本。
+# 参数：无。
+# 返回：命中调试参数返回 true，否则返回 false。
+func _try_run_dev_verifier() -> bool:
+	var user_args: PackedStringArray = OS.get_cmdline_user_args()
+	if not user_args.has("--battle-verify"):
+		return false
+
+	var verifier: Node = BATTLE_VERIFIER_SCRIPT.new() as Node
+	if verifier == null:
+		push_error("[MainMenu] failed to create battle verifier")
+		get_tree().quit()
+		return true
+
+	add_child(verifier)
+	return true
 
 
 # 作用：创建统一尺寸的主菜单按钮。
