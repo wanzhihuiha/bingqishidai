@@ -23,6 +23,8 @@ GameState="*res://scripts/managers/GameState.gd"
 JobManager="*res://scripts/managers/JobManager.gd"
 QuestManager="*res://scripts/managers/QuestManager.gd"
 NightSettlementManager="*res://scripts/managers/NightSettlementManager.gd"
+BattleResolver="*res://scripts/managers/BattleResolver.gd"
+ExpeditionManager="*res://scripts/managers/ExpeditionManager.gd"
 SceneRouter="*res://scripts/managers/SceneRouter.gd"
 EventManager="*res://scripts/managers/EventManager.gd"
 

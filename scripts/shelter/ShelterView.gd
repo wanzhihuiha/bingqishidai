@@ -29,6 +29,7 @@ const JOB_ORDER: Array[String] = ["worker", "hunter", "cook", "medic", "engineer
 const NIGHT_SETTLEMENT_POPUP_SCRIPT: Script = preload("res://scripts/ui/NightSettlementPopup.gd")
 const EVENT_POPUP_SCRIPT: Script = preload("res://scripts/ui/EventPopup.gd")
 const BUILDING_PANEL_SCRIPT: Script = preload("res://scripts/shelter/BuildingPanel.gd")
+const EXPEDITION_MANAGER_SCRIPT: Script = preload("res://scripts/managers/ExpeditionManager.gd")
 const COLLECT_BUILDINGS: Array[Dictionary] = [
 	{
 		"title": "伐木棚",
@@ -78,6 +79,12 @@ var hero_empty_label: Label
 var hero_rows: Dictionary = {}
 var squad_list_box: VBoxContainer
 var squad_rows: Dictionary = {}
+var expedition_panel: PanelContainer
+var expedition_list_box: VBoxContainer
+var expedition_empty_label: Label
+var expedition_rows: Dictionary = {}
+var expedition_selected_squad_id: String = ""
+var expedition_selected_id: String = ""
 var job_total_label: Label
 var job_assignable_label: Label
 var job_rows: Dictionary = {}
@@ -98,6 +105,8 @@ func _ready() -> void:
 		GameState.temperature_changed.connect(_refresh_hud)
 	if not GameState.quest_relevant_state_changed.is_connected(_refresh_quest_panel):
 		GameState.quest_relevant_state_changed.connect(_refresh_quest_panel)
+	if not GameState.state_changed.is_connected(_refresh_expedition_panel):
+		GameState.state_changed.connect(_refresh_expedition_panel)
 	_build_ui()
 	_refresh_hud()
 
@@ -206,6 +215,7 @@ func _make_main_scroll() -> ScrollContainer:
 	center_column.add_theme_constant_override("separation", 16)
 	center_column.add_child(_make_center_panel())
 	center_column.add_child(_make_hero_panel())
+	center_column.add_child(_make_expedition_panel())
 	row.add_child(center_column)
 	return scroll
 
@@ -422,6 +432,81 @@ func _make_hero_panel() -> PanelContainer:
 	return hero_panel
 
 
+# 作用：创建探险任务子面板。
+# 参数：无。
+# 返回：PanelContainer，包含可派遣小队、可选任务和预览信息。
+func _make_expedition_panel() -> PanelContainer:
+	expedition_panel = PanelContainer.new()
+	expedition_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	expedition_panel.custom_minimum_size = Vector2(0, 360)
+
+	var box: VBoxContainer = VBoxContainer.new()
+	box.add_theme_constant_override("separation", 10)
+	expedition_panel.add_child(box)
+
+	var title: Label = Label.new()
+	title.text = "探险任务"
+	title.add_theme_font_size_override("font_size", 22)
+	box.add_child(title)
+
+	expedition_empty_label = Label.new()
+	expedition_empty_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	expedition_empty_label.text = "先选择一支小队和一个任务。"
+	box.add_child(expedition_empty_label)
+
+	expedition_list_box = VBoxContainer.new()
+	expedition_list_box.add_theme_constant_override("separation", 8)
+	box.add_child(expedition_list_box)
+
+	for expedition_id: String in DataLoader.get_expedition_order():
+		expedition_list_box.add_child(_make_expedition_card(expedition_id))
+
+	return expedition_panel
+
+
+# 作用：创建单个探险任务卡片。
+# 参数：expedition_id 是探险模板 id。
+# 返回：PanelContainer，包含任务信息、成功率、奖励、风险和派遣按钮。
+func _make_expedition_card(expedition_id: String) -> PanelContainer:
+	var card: PanelContainer = PanelContainer.new()
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	var box: VBoxContainer = VBoxContainer.new()
+	box.add_theme_constant_override("separation", 4)
+	card.add_child(box)
+
+	var title_label: Label = Label.new()
+	title_label.add_theme_font_size_override("font_size", 18)
+	box.add_child(title_label)
+
+	var info_label: Label = Label.new()
+	info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(info_label)
+
+	var preview_label: Label = Label.new()
+	preview_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(preview_label)
+
+	var actions: HBoxContainer = HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 8)
+	box.add_child(actions)
+
+	var dispatch_button: Button = Button.new()
+	dispatch_button.text = "派遣"
+	dispatch_button.custom_minimum_size = Vector2(90, 34)
+	dispatch_button.pressed.connect(_on_dispatch_expedition_pressed.bind(expedition_id))
+	actions.add_child(dispatch_button)
+
+	expedition_rows[expedition_id] = {
+		"card": card,
+		"title": title_label,
+		"info": info_label,
+		"preview": preview_label,
+		"dispatch": dispatch_button
+	}
+	return card
+
+
 # 作用：创建单个英雄展示卡片。
 # 参数：hero_id 是英雄 id。
 # 返回：PanelContainer，包含头像占位、基础信息和当前状态。
@@ -502,6 +587,12 @@ func _make_squad_card(squad_id: String) -> PanelContainer:
 	actions.add_theme_constant_override("separation", 8)
 	box.add_child(actions)
 
+	var select_button: Button = Button.new()
+	select_button.text = "选中"
+	select_button.custom_minimum_size = Vector2(90, 34)
+	select_button.pressed.connect(_on_select_expedition_squad_pressed.bind(squad_id))
+	actions.add_child(select_button)
+
 	var add_button: Button = Button.new()
 	add_button.text = "编入英雄"
 	add_button.custom_minimum_size = Vector2(110, 34)
@@ -538,6 +629,7 @@ func _make_squad_card(squad_id: String) -> PanelContainer:
 		"description": desc_label,
 		"meta": meta_label,
 		"heroes": heroes_label,
+		"select": select_button,
 		"add": add_button,
 		"remove": remove_button,
 		"clear": clear_button,
@@ -859,6 +951,7 @@ func _refresh_hud() -> void:
 	_refresh_feature_buttons()
 	_refresh_job_panel()
 	_refresh_hero_panel()
+	_refresh_expedition_panel()
 	_refresh_quest_panel()
 	_refresh_report_panel()
 
@@ -878,7 +971,7 @@ func _on_end_day_pressed() -> void:
 	print("[ShelterView] button=end_day")
 	if end_day_confirm_dialog == null:
 		_create_end_day_confirm_dialog()
-	end_day_confirm_dialog.dialog_text = "结束一天后会进入夜晚结算，并推进到第 %d 天。\n是否继续？" % (GameState.day + 1)
+	end_day_confirm_dialog.dialog_text = "结束一天后会进入夜晚结算，并统一结算已派遣探险。\n是否继续？"
 	end_day_confirm_dialog.popup_centered()
 
 
@@ -937,6 +1030,7 @@ func _refresh_hero_panel() -> void:
 		_refresh_hero_card(hero_id)
 	for squad_id: String in DataLoader.get_squad_order():
 		_refresh_squad_card(squad_id)
+	_refresh_expedition_panel()
 
 
 # 作用：刷新单个英雄卡片。
@@ -1003,12 +1097,13 @@ func _refresh_squad_card(squad_id: String) -> void:
 	var desc_label: Label = row_info.get("description") as Label
 	var meta_label: Label = row_info.get("meta") as Label
 	var heroes_label: Label = row_info.get("heroes") as Label
+	var select_button: Button = row_info.get("select") as Button
 	var add_button: Button = row_info.get("add") as Button
 	var remove_button: Button = row_info.get("remove") as Button
 	var clear_button: Button = row_info.get("clear") as Button
 	var dispatch_button: Button = row_info.get("dispatch") as Button
 	var recall_button: Button = row_info.get("recall") as Button
-	if title_label == null or desc_label == null or meta_label == null or heroes_label == null or add_button == null or remove_button == null or clear_button == null or dispatch_button == null or recall_button == null:
+	if title_label == null or desc_label == null or meta_label == null or heroes_label == null or select_button == null or add_button == null or remove_button == null or clear_button == null or dispatch_button == null or recall_button == null:
 		return
 
 	var squad_name: String = str(config.get("name", squad_id))
@@ -1037,12 +1132,113 @@ func _refresh_squad_card(squad_id: String) -> void:
 		task_text
 	]
 	heroes_label.text = "成员：%s" % _format_squad_hero_names(hero_ids)
+	select_button.disabled = status != "idle" or hero_ids.is_empty()
+	if expedition_selected_squad_id == squad_id:
+		select_button.text = "已选中"
+	else:
+		select_button.text = "选中"
 
 	add_button.disabled = _get_next_assignable_hero_id_for_squad(squad_id).is_empty()
 	remove_button.disabled = hero_ids.is_empty()
 	clear_button.disabled = hero_ids.is_empty()
 	dispatch_button.disabled = not GameState.can_dispatch_squad(squad_id)
 	recall_button.disabled = status != "assigned"
+
+
+# 作用：选中一个用于探险派遣的小队。
+# 参数：squad_id 是小队 id。
+# 返回：无。会刷新探险面板预览。
+func _on_select_expedition_squad_pressed(squad_id: String) -> void:
+	expedition_selected_squad_id = squad_id
+	expedition_selected_id = ""
+	_show_action_message("%s 已选中，用于探险派遣" % _get_squad_name(squad_id), true)
+	_refresh_expedition_panel()
+
+
+# 作用：刷新探险任务面板。
+# 参数：无。
+# 返回：无。会根据小队状态和任务条件更新展示。
+func _refresh_expedition_panel() -> void:
+	if expedition_panel == null or expedition_list_box == null or expedition_empty_label == null:
+		return
+
+	var can_show: bool = BuildingManager.can_show_feature_unlocked("hero_squad")
+	expedition_panel.visible = can_show
+	expedition_list_box.visible = can_show
+	if not can_show:
+		expedition_empty_label.text = "训练场 1 级后解锁探险任务。"
+		return
+
+	if expedition_rows.is_empty():
+		expedition_empty_label.text = "暂无可用探险任务。"
+		return
+
+	expedition_empty_label.text = "先选小队，再点任务派遣。结算会在结束一天时统一完成。"
+	for expedition_id: String in DataLoader.get_expedition_order():
+		_refresh_expedition_card(expedition_id)
+
+
+# 作用：刷新单个探险任务卡片。
+# 参数：expedition_id 是探险模板 id。
+# 返回：无。展示成功率、奖励、风险和派遣按钮状态。
+func _refresh_expedition_card(expedition_id: String) -> void:
+	var row_info: Dictionary = expedition_rows.get(expedition_id, {}) as Dictionary
+	if row_info.is_empty():
+		return
+
+	var config: Dictionary = DataLoader.get_expedition_config(expedition_id)
+	var title_label: Label = row_info.get("title") as Label
+	var info_label: Label = row_info.get("info") as Label
+	var preview_label: Label = row_info.get("preview") as Label
+	var dispatch_button: Button = row_info.get("dispatch") as Button
+	if title_label == null or info_label == null or preview_label == null or dispatch_button == null:
+		return
+
+	var title: String = str(config.get("title", expedition_id))
+	var description: String = str(config.get("description", ""))
+	var required_tags: Array = config.get("required_tags", []) as Array
+	var reward_text: String = ExpeditionManager.get_reward_preview_text(expedition_id)
+	var risk_text: String = ExpeditionManager.get_risk_preview_text(expedition_id)
+	var success_rate_text: String = "成功率：--"
+	if not expedition_selected_squad_id.is_empty():
+		var success_rate: float = ExpeditionManager.get_success_rate_preview(expedition_selected_squad_id, expedition_id)
+		success_rate_text = "成功率：%d%%" % int(round(success_rate * 100.0))
+
+	title_label.text = title
+	info_label.text = "说明：%s；标签：%s" % [description, _join_values(_to_string_array(required_tags))]
+	preview_label.text = "%s；预计奖励：%s；可能风险：%s" % [
+		success_rate_text,
+		reward_text,
+		risk_text
+	]
+	dispatch_button.disabled = expedition_selected_squad_id.is_empty() or not GameState.can_dispatch_expedition(expedition_selected_squad_id, expedition_id)
+	if expedition_selected_id == expedition_id:
+		dispatch_button.text = "已选任务"
+	else:
+		dispatch_button.text = "派遣"
+
+
+# 作用：响应探险任务派遣按钮。
+# 参数：expedition_id 是探险模板 id。
+# 返回：无。会将当前选中小队派往对应任务。
+func _on_dispatch_expedition_pressed(expedition_id: String) -> void:
+	if expedition_selected_squad_id.is_empty():
+		_show_action_message("请先选中一支小队", false)
+		return
+	if not GameState.can_dispatch_expedition(expedition_selected_squad_id, expedition_id):
+		_show_action_message("当前小队不满足该任务条件", false)
+		return
+
+	var success: bool = ExpeditionManager.dispatch_expedition(expedition_selected_squad_id, expedition_id)
+	if success:
+		expedition_selected_id = expedition_id
+		_show_action_message("%s 已派往 %s" % [
+			_get_squad_name(expedition_selected_squad_id),
+			str(DataLoader.get_expedition_config(expedition_id).get("title", expedition_id))
+		], true)
+	else:
+		_show_action_message("派遣失败，请检查补给、状态或任务条件", false)
+	_refresh_expedition_panel()
 
 
 # 作用：响应“小队编入英雄”按钮。

@@ -35,6 +35,8 @@ var assigned_jobs_total: int = 0
 var scout_state: Dictionary = {}
 var regions: Dictionary = {}
 var quests: Dictionary = {}
+var expeditions: Dictionary = {}
+var beacon: Dictionary = {}
 var daily_flags: Dictionary = {}
 var event_history: Dictionary = {}
 var battle_reports: Array[String] = []
@@ -61,6 +63,8 @@ func start_new_game() -> void:
 	scout_state = _build_initial_scout_state()
 	regions = _build_initial_regions()
 	quests = _build_initial_quests()
+	expeditions = _build_initial_expeditions()
+	beacon = _build_initial_beacon()
 	daily_flags = _build_initial_daily_flags()
 	event_history = _build_initial_event_history()
 	battle_reports = []
@@ -699,6 +703,28 @@ func get_hero_injury_state(hero_id: String) -> String:
 	return str(state.get("injury_state", "healthy"))
 
 
+# 作用：获取信标运行时状态。
+# 参数：无。
+# 返回：信标状态 Dictionary 的深拷贝。
+func get_beacon_state() -> Dictionary:
+	return beacon.duplicate(true)
+
+
+# 作用：设置信标某个字段的值。
+# 参数：key 是字段名；value 是新值；source 是日志来源。
+# 返回：无。会更新信标运行时状态并发出状态变化。
+func set_beacon_value(key: String, value: Variant, source: String) -> void:
+	var before: Variant = beacon.get(key, null)
+	beacon[key] = value
+	print("[GameState] set_beacon_value source=%s key=%s before=%s after=%s" % [
+		source,
+		key,
+		str(before),
+		str(value)
+	])
+	state_changed.emit()
+
+
 # 作用：获取指定小队运行时状态。
 # 参数：squad_id 是小队 id。
 # 返回：小队状态 Dictionary；没有时返回空字典。
@@ -742,12 +768,255 @@ func get_squad_assigned_task_id(squad_id: String) -> String:
 	return str(state.get("assigned_task_id", ""))
 
 
+# 作用：获取指定小队当前执行的探险模板 id。
+# 参数：squad_id 是小队 id。
+# 返回：探险模板 id；没有任务时返回空字符串。
+func get_squad_assigned_expedition_id(squad_id: String) -> String:
+	return get_squad_assigned_task_id(squad_id)
+
+
 # 作用：判断指定小队今天是否已经行动过。
 # 参数：squad_id 是小队 id。
 # 返回：今天已行动返回 true，否则返回 false。
 func has_squad_acted_today(squad_id: String) -> bool:
 	var state: Dictionary = squads.get(squad_id, {}) as Dictionary
 	return bool(state.get("acted_today", false))
+
+
+# 作用：判断某个探险是否已配置为当前运行时状态。
+# 参数：expedition_id 是探险模板 id。
+# 返回：已写入运行时状态返回 true。
+func has_expedition_state(expedition_id: String) -> bool:
+	return expeditions.has(expedition_id)
+
+
+# 作用：判断指定小队是否可以执行某个探险模板。
+# 参数：squad_id 是小队 id；expedition_id 是探险模板 id。
+# 返回：满足队伍状态、人数、英雄标签、任务条件和食物条件时返回 true。
+func can_dispatch_expedition(squad_id: String, expedition_id: String) -> bool:
+	var squad_config: Dictionary = DataLoader.get_squad_config(squad_id)
+	var expedition_config: Dictionary = DataLoader.get_expedition_config(expedition_id)
+	if squad_config.is_empty() or expedition_config.is_empty():
+		return false
+
+	var state: Dictionary = squads.get(squad_id, {}) as Dictionary
+	if str(state.get("status", "idle")) != "idle":
+		return false
+	if bool(state.get("acted_today", false)):
+		return false
+
+	var hero_ids: Array[String] = get_squad_hero_ids(squad_id)
+	if hero_ids.is_empty():
+		return false
+
+	var required_tags: Array = expedition_config.get("required_tags", []) as Array
+	if not _squad_meets_required_tags(squad_id, required_tags):
+		return false
+
+	var food_cost: int = int(expedition_config.get("food_cost", 0))
+	if get_resource_amount("food") < food_cost:
+		return false
+
+	var conditions: Dictionary = expedition_config.get("conditions", {}) as Dictionary
+	if not _matches_expedition_conditions(conditions):
+		return false
+
+	return true
+
+
+# 作用：获取某个小队是否满足探险模板所需标签。
+# 参数：squad_id 是小队 id；required_tags 是探险配置里的 required_tags 数组。
+# 返回：满足返回 true。
+func _squad_meets_required_tags(squad_id: String, required_tags: Array) -> bool:
+	if required_tags.is_empty():
+		return true
+
+	var squad_config: Dictionary = DataLoader.get_squad_config(squad_id)
+	if squad_config.is_empty():
+		return false
+	var squad_id_text: String = str(squad_config.get("id", ""))
+	var squad_name: String = str(squad_config.get("name", ""))
+	var hero_ids: Array[String] = get_squad_hero_ids(squad_id)
+
+	for tag_value: Variant in required_tags:
+		var tag: String = str(tag_value)
+		if _squad_has_tag(squad_id_text, squad_name, hero_ids, tag):
+			continue
+		return false
+	return true
+
+
+# 作用：判断小队或英雄标签是否命中某个探险标签。
+# 参数：squad_id_text 是小队 id 文本；squad_name 是小队中文名；hero_ids 是英雄 id 列表；tag 是待匹配标签。
+# 返回：命中返回 true。
+func _squad_has_tag(squad_id_text: String, squad_name: String, hero_ids: Array[String], tag: String) -> bool:
+	if squad_id_text.find(tag) >= 0 or squad_name.find(tag) >= 0:
+		return true
+
+	if tag == "scout" and squad_id_text == "pioneer_team":
+		return true
+	if tag == "gather" and squad_id_text == "pioneer_team":
+		return true
+	if tag == "escort" and squad_id_text == "guard_team":
+		return true
+	if tag == "guard" and squad_id_text == "guard_team":
+		return true
+	if tag == "rescue" and squad_id_text == "rescue_team":
+		return true
+	if tag == "medical" and squad_id_text == "rescue_team":
+		return true
+
+	for hero_id: String in hero_ids:
+		var hero_config: Dictionary = DataLoader.get_hero_config(hero_id)
+		var specialty_tags: Array = hero_config.get("specialty_tags", []) as Array
+		for specialty_value: Variant in specialty_tags:
+			if str(specialty_value) == tag:
+				return true
+	return false
+
+
+# 作用：判断探险条件是否满足。
+# 参数：conditions 是 expeditions.json 里的 conditions 字典。
+# 返回：满足返回 true。
+func _matches_expedition_conditions(conditions: Dictionary) -> bool:
+	if conditions.is_empty():
+		return true
+
+	var min_day: int = int(conditions.get("min_day", 0))
+	if min_day > 0 and day < min_day:
+		return false
+
+	var max_day: int = int(conditions.get("max_day", 0))
+	if max_day > 0 and day > max_day:
+		return false
+
+	var required_region_id: String = str(conditions.get("required_region_id", ""))
+	if not required_region_id.is_empty():
+		var region_state: Dictionary = regions.get(required_region_id, {}) as Dictionary
+		if region_state.is_empty():
+			return false
+
+	var min_resources: Dictionary = conditions.get("min_resources", {}) as Dictionary
+	for resource_id_value: Variant in min_resources.keys():
+		var resource_id: String = str(resource_id_value)
+		var required_amount: int = int(min_resources.get(resource_id, 0))
+		if get_resource_amount(resource_id) < required_amount:
+			return false
+
+	return true
+
+
+# 作用：派出小队执行指定探险任务。
+# 参数：squad_id 是小队 id；expedition_id 是探险模板 id；source 是日志来源。
+# 返回：派遣成功返回 true；条件不满足返回 false。
+func dispatch_expedition(squad_id: String, expedition_id: String, source: String) -> bool:
+	if not can_dispatch_expedition(squad_id, expedition_id):
+		print("[GameState] dispatch_expedition rejected source=%s squad=%s expedition=%s" % [
+			source,
+			squad_id,
+			expedition_id
+		])
+		return false
+
+	var state: Dictionary = _get_or_create_squad_state(squad_id)
+	var expedition_config: Dictionary = DataLoader.get_expedition_config(expedition_id)
+	var food_cost: int = int(expedition_config.get("food_cost", 0))
+	var hero_ids: Array[String] = get_squad_hero_ids(squad_id)
+	if food_cost > 0:
+		add_resource("food", -food_cost, source)
+
+	state["status"] = "assigned"
+	state["assigned_task_id"] = expedition_id
+	state["acted_today"] = true
+	squads[squad_id] = state
+
+	for hero_id: String in hero_ids:
+		set_hero_available(hero_id, false, source)
+
+	expeditions[expedition_id] = {
+		"squad_id": squad_id,
+		"status": "assigned",
+		"resolved": false,
+		"result_id": "",
+		"day_assigned": day
+	}
+	print("[GameState] dispatch_expedition source=%s squad=%s expedition=%s food_cost=%d hero_ids=%s" % [
+		source,
+		squad_id,
+		expedition_id,
+		food_cost,
+		str(hero_ids)
+	])
+	state_changed.emit()
+	return true
+
+
+# 作用：获取所有探险运行时状态。
+# 参数：无。
+# 返回：探险 id 到状态的深拷贝。
+func get_expedition_states() -> Dictionary:
+	return expeditions.duplicate(true)
+
+
+# 作用：获取指定探险的运行时状态。
+# 参数：expedition_id 是探险模板 id。
+# 返回：状态 Dictionary；没有时返回空字典。
+func get_expedition_state(expedition_id: String) -> Dictionary:
+	var state: Dictionary = expeditions.get(expedition_id, {}) as Dictionary
+	return state.duplicate(true)
+
+
+# 作用：判断指定探险今天是否已经结算过。
+# 参数：expedition_id 是探险模板 id。
+# 返回：已结算返回 true，否则返回 false。
+func was_expedition_resolved(expedition_id: String) -> bool:
+	var resolved_ids: Dictionary = daily_flags.get("expedition_resolved_ids", {}) as Dictionary
+	return bool(resolved_ids.get(expedition_id, false))
+
+
+# 作用：标记某个探险今天已经结算。
+# 参数：expedition_id 是探险模板 id；source 是日志来源。
+# 返回：无。用于避免同一天重复结算。
+func mark_expedition_resolved(expedition_id: String, source: String) -> void:
+	var resolved_ids: Dictionary = daily_flags.get("expedition_resolved_ids", {}) as Dictionary
+	resolved_ids[expedition_id] = true
+	daily_flags["expedition_resolved_ids"] = resolved_ids
+	var state: Dictionary = _get_or_create_expedition_state(expedition_id)
+	state["resolved"] = true
+	expeditions[expedition_id] = state
+	print("[GameState] mark_expedition_resolved source=%s expedition=%s" % [source, expedition_id])
+	state_changed.emit()
+
+
+# 作用：获取某个探险模板对应的战报标题。
+# 参数：expedition_id 是探险模板 id。
+# 返回：中文标题；缺失时返回探险 id。
+func get_expedition_title(expedition_id: String) -> String:
+	var config: Dictionary = DataLoader.get_expedition_config(expedition_id)
+	return str(config.get("title", expedition_id))
+
+
+# 作用：记录探险结算结果到战报，并同步探险状态。
+# 参数：expedition_id 是探险模板 id；result 是结算结果；source 是日志来源。
+# 返回：无。结算结果会写入战报和运行时探险状态。
+func record_expedition_result(expedition_id: String, result: Dictionary, source: String) -> void:
+	var title: String = get_expedition_title(expedition_id)
+	var outcome_name: String = str(result.get("outcome_name", "结果未知"))
+	var line: String = "%s：%s" % [title, outcome_name]
+	add_battle_report(line, source)
+	var state: Dictionary = _get_or_create_expedition_state(expedition_id)
+	state["status"] = "resolved"
+	state["resolved"] = true
+	state["result_id"] = str(result.get("outcome_id", ""))
+	state["resolved_day"] = day
+	expeditions[expedition_id] = state
+	mark_expedition_resolved(expedition_id, source)
+	print("[GameState] record_expedition_result source=%s expedition=%s result=%s" % [
+		source,
+		expedition_id,
+		str(result)
+	])
+	state_changed.emit()
 
 
 # 作用：判断指定英雄是否可以加入目标小队。
@@ -1011,6 +1280,74 @@ func set_hero_injury_state(hero_id: String, injury_state: String, source: String
 func is_region_scouted(region_id: String) -> bool:
 	var state: Dictionary = regions.get(region_id, {}) as Dictionary
 	return bool(state.get("is_scouted", false))
+
+
+# 作用：设定某个区域的当前归属。
+# 参数：region_id 是区域 id；owner 是新的归属值；source 是日志来源。
+# 返回：无。会刷新区域运行时状态并通知界面。
+func set_region_owner(region_id: String, owner: String, source: String) -> void:
+	var state: Dictionary = regions.get(region_id, {}) as Dictionary
+	if state.is_empty():
+		state = {
+			"current_owner": owner,
+			"current_danger_level": 0,
+			"is_scouted": false,
+			"has_outpost": false,
+			"outpost_hp": 0,
+			"is_enemy_target": false
+		}
+	var before: String = str(state.get("current_owner", "neutral"))
+	state["current_owner"] = owner
+	regions[region_id] = state
+	print("[GameState] set_region_owner source=%s region=%s before=%s after=%s" % [
+		source,
+		region_id,
+		before,
+		owner
+	])
+	quest_relevant_state_changed.emit()
+	state_changed.emit()
+
+
+# 作用：设定某个区域的危险度。
+# 参数：region_id 是区域 id；danger_level 是新的危险度；source 是日志来源。
+# 返回：无。
+func set_region_danger_level(region_id: String, danger_level: int, source: String) -> void:
+	var state: Dictionary = regions.get(region_id, {}) as Dictionary
+	if state.is_empty():
+		state = {
+			"current_owner": "neutral",
+			"current_danger_level": danger_level,
+			"is_scouted": false,
+			"has_outpost": false,
+			"outpost_hp": 0,
+			"is_enemy_target": false
+		}
+	state["current_danger_level"] = max(danger_level, 0)
+	regions[region_id] = state
+	print("[GameState] set_region_danger_level source=%s region=%s danger=%d" % [
+		source,
+		region_id,
+		int(state.get("current_danger_level", 0))
+	])
+	quest_relevant_state_changed.emit()
+	state_changed.emit()
+
+
+# 作用：获取某个区域当前归属。
+# 参数：region_id 是区域 id。
+# 返回：当前归属字符串；没有时返回 neutral。
+func get_region_owner(region_id: String) -> String:
+	var state: Dictionary = regions.get(region_id, {}) as Dictionary
+	return str(state.get("current_owner", "neutral"))
+
+
+# 作用：获取某个区域当前危险度。
+# 参数：region_id 是区域 id。
+# 返回：当前危险度整数；没有时返回 0。
+func get_region_danger_level(region_id: String) -> int:
+	var state: Dictionary = regions.get(region_id, {}) as Dictionary
+	return int(state.get("current_danger_level", 0))
 
 
 # 作用：初始化任务状态到指定第一个任务。
@@ -1314,11 +1651,22 @@ func _build_initial_scout_state() -> Dictionary:
 # 参数：无。
 # 返回：区域运行时状态 Dictionary，目前先记录第一个教学侦察区域。
 func _build_initial_regions() -> Dictionary:
-	return {
-		FIRST_SCOUT_REGION_ID: {
-			"is_scouted": false
+	var result: Dictionary = {}
+	var configs: Dictionary = DataLoader.get_region_configs()
+
+	for region_id_value: Variant in configs.keys():
+		var region_id: String = str(region_id_value)
+		var config: Dictionary = configs.get(region_id, {}) as Dictionary
+		result[region_id] = {
+			"current_owner": str(config.get("initial_owner", "neutral")),
+			"current_danger_level": int(config.get("initial_danger_level", 0)),
+			"is_scouted": false,
+			"has_outpost": false,
+			"outpost_hp": 0,
+			"is_enemy_target": false
 		}
-	}
+
+	return result
 
 
 # 作用：生成新游戏初始任务状态。
@@ -1336,6 +1684,25 @@ func _build_initial_quests() -> Dictionary:
 	}
 
 
+# 作用：生成新游戏初始探险状态。
+# 参数：无。
+# 返回：探险状态 Dictionary；当前只保留运行时占位，便于面板和结算读取。
+func _build_initial_expeditions() -> Dictionary:
+	return {}
+
+
+# 作用：生成新游戏初始信标状态。
+# 参数：无。
+# 返回：信标状态 Dictionary，包含情报、修复进度和发送状态。
+func _build_initial_beacon() -> Dictionary:
+	return {
+		"is_contacted": false,
+		"intel_count": 0,
+		"repair_progress": 0,
+		"is_signal_sent": false
+	}
+
+
 # 作用：生成每日标记的初始值。
 # 参数：无。
 # 返回：每日标记 Dictionary，例如今天是否升级建筑、是否处理事件。
@@ -1343,7 +1710,8 @@ func _build_initial_daily_flags() -> Dictionary:
 	return {
 		"building_upgraded": false,
 		"event_resolved": false,
-		"resource_collected_today": {}
+		"resource_collected_today": {},
+		"expedition_resolved_ids": {}
 	}
 
 
@@ -1437,6 +1805,23 @@ func _get_or_create_squad_state(squad_id: String) -> Dictionary:
 			"status": "idle",
 			"assigned_task_id": "",
 			"acted_today": false
+		}
+	return state
+
+
+# 作用：获取指定探险状态，如果不存在则创建默认状态。
+# 参数：expedition_id 是探险模板 id。
+# 返回：探险运行时状态 Dictionary。
+func _get_or_create_expedition_state(expedition_id: String) -> Dictionary:
+	var state: Dictionary = expeditions.get(expedition_id, {}) as Dictionary
+	if state.is_empty():
+		state = {
+			"squad_id": "",
+			"status": "idle",
+			"resolved": false,
+			"result_id": "",
+			"day_assigned": 0,
+			"resolved_day": 0
 		}
 	return state
 

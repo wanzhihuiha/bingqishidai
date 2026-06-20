@@ -6,6 +6,8 @@ const JOBS_PATH: String = "res://data/jobs.json"
 const BUILDINGS_PATH: String = "res://data/buildings.json"
 const HEROES_PATH: String = "res://data/heroes.json"
 const SQUADS_PATH: String = "res://data/squads.json"
+const EXPEDITIONS_PATH: String = "res://data/expeditions.json"
+const BATTLE_RULES_PATH: String = "res://data/battle_rules.json"
 const QUESTS_PATH: String = "res://data/quests.json"
 const REGIONS_PATH: String = "res://data/regions.json"
 const EVENTS_PATH: String = "res://data/events.json"
@@ -21,6 +23,9 @@ var hero_configs: Dictionary = {}
 var hero_order: Array[String] = []
 var squad_configs: Dictionary = {}
 var squad_order: Array[String] = []
+var expedition_configs: Dictionary = {}
+var expedition_order: Array[String] = []
+var battle_rules_config: Dictionary = {}
 var quest_configs: Dictionary = {}
 var quest_order: Array[String] = []
 var region_configs: Dictionary = {}
@@ -45,16 +50,19 @@ func load_all() -> void:
 	building_configs = _load_building_configs()
 	hero_configs = _load_hero_configs()
 	squad_configs = _load_squad_configs()
+	expedition_configs = _load_expedition_configs()
+	battle_rules_config = _load_battle_rules_config()
 	quest_configs = _load_quest_configs()
 	region_configs = _load_region_configs()
 	event_configs = _load_event_configs()
-	print("[DataLoader] load_all resources=%d survivor_config=%s jobs=%d buildings=%d heroes=%d squads=%d quests=%d events=%d" % [
+	print("[DataLoader] load_all resources=%d survivor_config=%s jobs=%d buildings=%d heroes=%d squads=%d expeditions=%d quests=%d events=%d" % [
 		resource_configs.size(),
 		str(not survivor_config.is_empty()),
 		job_configs.size(),
 		building_configs.size(),
 		hero_configs.size(),
 		squad_configs.size(),
+		expedition_configs.size(),
 		quest_configs.size(),
 		event_configs.size()
 	])
@@ -183,6 +191,35 @@ func get_squad_order() -> Array[String]:
 func get_squad_config(squad_id: String) -> Dictionary:
 	var config: Dictionary = squad_configs.get(squad_id, {}) as Dictionary
 	return config.duplicate(true)
+
+
+# 作用：获取所有探险模板配置。
+# 参数：无。
+# 返回：探险 id 到探险配置 Dictionary 的映射。
+func get_expedition_configs() -> Dictionary:
+	return expedition_configs.duplicate(true)
+
+
+# 作用：获取探险模板显示顺序。
+# 参数：无。
+# 返回：探险 id 数组。
+func get_expedition_order() -> Array[String]:
+	return expedition_order.duplicate()
+
+
+# 作用：按探险 id 获取探险配置。
+# 参数：expedition_id 是探险模板 id。
+# 返回：探险配置 Dictionary；找不到时返回空字典。
+func get_expedition_config(expedition_id: String) -> Dictionary:
+	var config: Dictionary = expedition_configs.get(expedition_id, {}) as Dictionary
+	return config.duplicate(true)
+
+
+# 作用：获取自动战斗规则配置。
+# 参数：无。
+# 返回：battle_rules.json 的完整 Dictionary。
+func get_battle_rules_config() -> Dictionary:
+	return battle_rules_config.duplicate(true)
 
 
 # 作用：获取所有主线/引导任务配置。
@@ -409,6 +446,45 @@ func _load_squad_configs() -> Dictionary:
 
 	print("[DataLoader] load_squads count=%d order=%s" % [result.size(), str(squad_order)])
 	return result
+
+
+# 作用：从 expeditions.json 加载探险模板配置，并建立顺序。
+# 参数：无。
+# 返回：探险 id 到探险配置的 Dictionary；非法条目会被跳过。
+func _load_expedition_configs() -> Dictionary:
+	expedition_order.clear()
+	var data: Dictionary = _load_json_dictionary(EXPEDITIONS_PATH)
+	var items: Array = data.get("items", []) as Array
+	var result: Dictionary = {}
+
+	for item_value: Variant in items:
+		if typeof(item_value) != TYPE_DICTIONARY:
+			push_error("[DataLoader] expeditions item is not dictionary")
+			continue
+
+		var item: Dictionary = item_value as Dictionary
+		var expedition_id: String = str(item.get("id", ""))
+		if expedition_id.is_empty():
+			push_error("[DataLoader] expeditions item missing id")
+			continue
+		if result.has(expedition_id):
+			push_error("[DataLoader] duplicated expedition id=%s" % expedition_id)
+			continue
+
+		result[expedition_id] = item.duplicate(true)
+		expedition_order.append(expedition_id)
+
+	print("[DataLoader] load_expeditions count=%d order=%s" % [result.size(), str(expedition_order)])
+	return result
+
+
+# 作用：从 battle_rules.json 加载自动战斗规则。
+# 参数：无。
+# 返回：战斗规则 Dictionary；格式错误时返回空字典。
+func _load_battle_rules_config() -> Dictionary:
+	var data: Dictionary = _load_json_dictionary(BATTLE_RULES_PATH)
+	print("[DataLoader] load_battle_rules keys=%s" % str(data.keys()))
+	return data
 
 
 # 作用：从 quests.json 加载主线/引导任务配置，并建立任务顺序。

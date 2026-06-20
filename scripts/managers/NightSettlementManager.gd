@@ -87,6 +87,8 @@ func settle_night() -> Dictionary:
 	if hope_delta != 0:
 		GameState.add_resource("hope", hope_delta, "night_settlement_hope")
 
+	var expedition_results: Array[Dictionary] = ExpeditionManager.resolve_end_of_day_expeditions()
+
 	# 所有数值写入后，再取一次结算后快照。
 	var food_after: int = GameState.get_resource_amount("food")
 	var coal_after: int = GameState.get_resource_amount("coal")
@@ -159,6 +161,9 @@ func settle_night() -> Dictionary:
 		"jobs": {
 			"production": job_production,
 			"medical": medical_result
+		},
+		"expeditions": {
+			"results": expedition_results
 		}
 	}
 	result["lines"] = _build_display_lines(result)
