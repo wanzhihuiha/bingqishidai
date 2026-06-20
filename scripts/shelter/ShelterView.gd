@@ -9,6 +9,22 @@ const RESOURCE_NAMES: Dictionary = {
 	"parts": "零件",
 	"hope": "希望值"
 }
+const HERO_SPECIALTY_NAMES: Dictionary = {
+	"scout": "侦察",
+	"explore": "开路",
+	"repair": "修复",
+	"outpost": "前哨建设",
+	"guard": "护卫",
+	"intercept": "拦截",
+	"medical": "医疗支援",
+	"rescue": "搜救"
+}
+const HERO_INJURY_STATE_NAMES: Dictionary = {
+	"healthy": "健康",
+	"light_wound": "轻伤",
+	"heavy_wound": "重伤",
+	"dead": "死亡"
+}
 const JOB_ORDER: Array[String] = ["worker", "hunter", "cook", "medic", "engineer"]
 const NIGHT_SETTLEMENT_POPUP_SCRIPT: Script = preload("res://scripts/ui/NightSettlementPopup.gd")
 const EVENT_POPUP_SCRIPT: Script = preload("res://scripts/ui/EventPopup.gd")
@@ -56,6 +72,10 @@ var action_message_label: Label
 var squad_button: Button
 var end_day_confirm_dialog: ConfirmationDialog
 var report_labels: Array[Label] = []
+var hero_panel: PanelContainer
+var hero_list_box: VBoxContainer
+var hero_empty_label: Label
+var hero_rows: Dictionary = {}
 var job_total_label: Label
 var job_assignable_label: Label
 var job_rows: Dictionary = {}
@@ -178,7 +198,13 @@ func _make_main_scroll() -> ScrollContainer:
 	scroll.add_child(row)
 
 	row.add_child(_make_job_panel())
-	row.add_child(_make_center_panel())
+	var center_column: VBoxContainer = VBoxContainer.new()
+	center_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	center_column.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	center_column.add_theme_constant_override("separation", 16)
+	center_column.add_child(_make_center_panel())
+	center_column.add_child(_make_hero_panel())
+	row.add_child(center_column)
 	return scroll
 
 
@@ -349,6 +375,86 @@ func _make_center_panel() -> PanelContainer:
 		grid.add_child(_make_collect_card(config_value))
 
 	return panel
+
+
+# 作用：创建英雄子面板。
+# 参数：无。
+# 返回：PanelContainer，内部按训练场入口状态展示英雄列表或提示文本。
+func _make_hero_panel() -> PanelContainer:
+	hero_panel = PanelContainer.new()
+	hero_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hero_panel.custom_minimum_size = Vector2(0, 260)
+
+	var box: VBoxContainer = VBoxContainer.new()
+	box.add_theme_constant_override("separation", 10)
+	hero_panel.add_child(box)
+
+	var title: Label = Label.new()
+	title.text = "英雄小队"
+	title.add_theme_font_size_override("font_size", 22)
+	box.add_child(title)
+
+	hero_empty_label = Label.new()
+	hero_empty_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(hero_empty_label)
+
+	hero_list_box = VBoxContainer.new()
+	hero_list_box.add_theme_constant_override("separation", 10)
+	box.add_child(hero_list_box)
+
+	for hero_id: String in DataLoader.get_hero_order():
+		hero_list_box.add_child(_make_hero_card(hero_id))
+
+	return hero_panel
+
+
+# 作用：创建单个英雄展示卡片。
+# 参数：hero_id 是英雄 id。
+# 返回：PanelContainer，包含头像占位、基础信息和当前状态。
+func _make_hero_card(hero_id: String) -> PanelContainer:
+	var card: PanelContainer = PanelContainer.new()
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	var row: HBoxContainer = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	card.add_child(row)
+
+	var portrait: Label = Label.new()
+	portrait.text = "头像"
+	portrait.custom_minimum_size = Vector2(56, 56)
+	portrait.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	portrait.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(portrait)
+
+	var info_box: VBoxContainer = VBoxContainer.new()
+	info_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info_box.add_theme_constant_override("separation", 4)
+	row.add_child(info_box)
+
+	var name_label: Label = Label.new()
+	name_label.add_theme_font_size_override("font_size", 18)
+	info_box.add_child(name_label)
+
+	var role_label: Label = Label.new()
+	info_box.add_child(role_label)
+
+	var tags_label: Label = Label.new()
+	tags_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	info_box.add_child(tags_label)
+
+	var status_label: Label = Label.new()
+	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	info_box.add_child(status_label)
+
+	hero_rows[hero_id] = {
+		"card": card,
+		"portrait": portrait,
+		"name": name_label,
+		"role": role_label,
+		"tags": tags_label,
+		"status": status_label
+	}
+	return card
 
 
 # 作用：创建单个资源收取卡片。
@@ -662,6 +768,7 @@ func _refresh_hud() -> void:
 		building_panel.call("refresh")
 	_refresh_feature_buttons()
 	_refresh_job_panel()
+	_refresh_hero_panel()
 	_refresh_quest_panel()
 	_refresh_report_panel()
 
@@ -703,7 +810,7 @@ func _on_squad_pressed() -> void:
 	if not BuildingManager.can_show_feature_unlocked("hero_squad"):
 		_show_action_message("训练场 1 级后，点右侧建筑状态里的训练场查看英雄小队入口", false)
 		return
-	_show_action_message("英雄小队入口已解锁，正式编队功能将在后续章节接入。", true)
+	_show_action_message("英雄小队入口已解锁，下方会显示当前英雄状态。", true)
 
 
 # 作用：刷新功能入口按钮状态。
@@ -719,6 +826,74 @@ func _refresh_feature_buttons() -> void:
 	else:
 		squad_button.text = "英雄小队"
 		squad_button.tooltip_text = "训练场 1 级解锁"
+
+
+# 作用：刷新英雄子面板。
+# 参数：无。
+# 返回：无。会根据训练场入口状态和英雄加入状态更新展示。
+func _refresh_hero_panel() -> void:
+	if hero_panel == null or hero_empty_label == null or hero_list_box == null:
+		return
+
+	var can_show: bool = BuildingManager.can_show_feature_unlocked("hero_squad")
+	hero_list_box.visible = can_show
+	if not can_show:
+		hero_empty_label.text = "训练场 1 级后解锁英雄小队入口。"
+		return
+
+	hero_empty_label.text = "已加入英雄会随天数逐步到位，未加入英雄会显示预计加入时间。"
+	for hero_id: String in DataLoader.get_hero_order():
+		_refresh_hero_card(hero_id)
+
+
+# 作用：刷新单个英雄卡片。
+# 参数：hero_id 是英雄 id。
+# 返回：无。未加入英雄会置灰并展示加入天数。
+func _refresh_hero_card(hero_id: String) -> void:
+	var row_info: Dictionary = hero_rows.get(hero_id, {}) as Dictionary
+	if row_info.is_empty():
+		return
+
+	var config: Dictionary = DataLoader.get_hero_config(hero_id)
+	var state: Dictionary = GameState.get_hero_state(hero_id)
+	var card: PanelContainer = row_info.get("card") as PanelContainer
+	var name_label: Label = row_info.get("name") as Label
+	var role_label: Label = row_info.get("role") as Label
+	var tags_label: Label = row_info.get("tags") as Label
+	var status_label: Label = row_info.get("status") as Label
+	if card == null or name_label == null or role_label == null or tags_label == null or status_label == null:
+		return
+
+	var hero_name: String = str(config.get("name", hero_id))
+	var role: String = str(config.get("role", "未知定位"))
+	var join_day: int = int(config.get("join_day", 0))
+	var specialty_tags: Array = config.get("specialty_tags", []) as Array
+	var is_unlocked: bool = bool(state.get("is_unlocked", false))
+	var is_available: bool = bool(state.get("is_available", false))
+	var assigned_squad_id: String = str(state.get("assigned_squad_id", ""))
+	var injury_state: String = str(state.get("injury_state", "healthy"))
+
+	name_label.text = hero_name
+	role_label.text = "定位：%s" % role
+	tags_label.text = "专长：%s" % _format_hero_specialties(specialty_tags)
+
+	var dispatch_text: String = "不可派遣"
+	if is_available:
+		dispatch_text = "可派遣"
+	var squad_text: String = "未编队"
+	if not assigned_squad_id.is_empty():
+		squad_text = "编队：%s" % assigned_squad_id
+
+	if is_unlocked:
+		status_label.text = "状态：已加入，%s，伤病：%s，%s" % [
+			dispatch_text,
+			_format_hero_injury_state(injury_state),
+			squad_text
+		]
+		card.modulate = Color.WHITE
+	else:
+		status_label.text = "状态：第 %d 天加入，未加入，不可派遣" % join_day
+		card.modulate = Color(0.65, 0.65, 0.65, 1.0)
 
 
 # 作用：接收建筑面板操作结果。
@@ -887,6 +1062,39 @@ func _get_job_note_text(job_id: String, preview: Dictionary, resources: Dictiona
 			]
 		_:
 			return "岗位效果预览"
+
+
+# 作用：把任意数组转换成中文顿号连接文本。
+# 参数：values 是任意值数组。
+# 返回：拼接后的字符串；空数组返回“无”。
+func _join_values(values: Array) -> String:
+	var parts: PackedStringArray = PackedStringArray()
+	for value: Variant in values:
+		var text: String = str(value)
+		if text.is_empty():
+			continue
+		parts.append(text)
+	if parts.is_empty():
+		return "无"
+	return "、".join(parts)
+
+
+# 作用：把英雄专长标签数组转换成中文展示文案。
+# 参数：specialty_tags 是 heroes.json 中的专长标签数组。
+# 返回：中文专长文本；未知标签保留原值。
+func _format_hero_specialties(specialty_tags: Array) -> String:
+	var display_values: Array[String] = []
+	for tag_value: Variant in specialty_tags:
+		var tag: String = str(tag_value)
+		display_values.append(str(HERO_SPECIALTY_NAMES.get(tag, tag)))
+	return _join_values(display_values)
+
+
+# 作用：把英雄伤病状态转换成中文展示文案。
+# 参数：injury_state 是英雄运行时状态值。
+# 返回：中文状态文本；未知值保留原值。
+func _format_hero_injury_state(injury_state: String) -> String:
+	return str(HERO_INJURY_STATE_NAMES.get(injury_state, injury_state))
 
 
 # 作用：刷新当前目标面板。

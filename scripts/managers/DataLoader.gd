@@ -4,6 +4,7 @@ const RESOURCES_PATH: String = "res://data/resources.json"
 const SURVIVORS_PATH: String = "res://data/survivors.json"
 const JOBS_PATH: String = "res://data/jobs.json"
 const BUILDINGS_PATH: String = "res://data/buildings.json"
+const HEROES_PATH: String = "res://data/heroes.json"
 const QUESTS_PATH: String = "res://data/quests.json"
 const REGIONS_PATH: String = "res://data/regions.json"
 const EVENTS_PATH: String = "res://data/events.json"
@@ -15,6 +16,8 @@ var job_configs: Dictionary = {}
 var job_order: Array[String] = []
 var building_configs: Dictionary = {}
 var building_order: Array[String] = []
+var hero_configs: Dictionary = {}
+var hero_order: Array[String] = []
 var quest_configs: Dictionary = {}
 var quest_order: Array[String] = []
 var region_configs: Dictionary = {}
@@ -37,14 +40,16 @@ func load_all() -> void:
 	survivor_config = _load_survivor_config()
 	job_configs = _load_job_configs()
 	building_configs = _load_building_configs()
+	hero_configs = _load_hero_configs()
 	quest_configs = _load_quest_configs()
 	region_configs = _load_region_configs()
 	event_configs = _load_event_configs()
-	print("[DataLoader] load_all resources=%d survivor_config=%s jobs=%d buildings=%d quests=%d events=%d" % [
+	print("[DataLoader] load_all resources=%d survivor_config=%s jobs=%d buildings=%d heroes=%d quests=%d events=%d" % [
 		resource_configs.size(),
 		str(not survivor_config.is_empty()),
 		job_configs.size(),
 		building_configs.size(),
+		hero_configs.size(),
 		quest_configs.size(),
 		event_configs.size()
 	])
@@ -128,6 +133,28 @@ func get_building_order() -> Array[String]:
 # 返回：建筑配置 Dictionary；找不到时返回空字典。
 func get_building_config(building_id: String) -> Dictionary:
 	var config: Dictionary = building_configs.get(building_id, {}) as Dictionary
+	return config.duplicate(true)
+
+
+# 作用：获取所有英雄配置的深拷贝。
+# 参数：无。
+# 返回：英雄 id 到英雄配置 Dictionary 的映射。
+func get_hero_configs() -> Dictionary:
+	return hero_configs.duplicate(true)
+
+
+# 作用：获取英雄显示顺序。
+# 参数：无。
+# 返回：英雄 id 数组。
+func get_hero_order() -> Array[String]:
+	return hero_order.duplicate()
+
+
+# 作用：按英雄 id 获取英雄配置。
+# 参数：hero_id 是英雄 id，例如 lin_che。
+# 返回：英雄配置 Dictionary；找不到时返回空字典。
+func get_hero_config(hero_id: String) -> Dictionary:
+	var config: Dictionary = hero_configs.get(hero_id, {}) as Dictionary
 	return config.duplicate(true)
 
 
@@ -294,6 +321,36 @@ func _load_building_configs() -> Dictionary:
 		building_order.append(building_id)
 
 	print("[DataLoader] load_buildings count=%d order=%s" % [result.size(), str(building_order)])
+	return result
+
+
+# 作用：从 heroes.json 加载英雄配置，并建立英雄顺序。
+# 参数：无。
+# 返回：英雄 id 到英雄配置的 Dictionary；非法条目会被跳过。
+func _load_hero_configs() -> Dictionary:
+	hero_order.clear()
+	var data: Dictionary = _load_json_dictionary(HEROES_PATH)
+	var items: Array = data.get("items", []) as Array
+	var result: Dictionary = {}
+
+	for item_value: Variant in items:
+		if typeof(item_value) != TYPE_DICTIONARY:
+			push_error("[DataLoader] heroes item is not dictionary")
+			continue
+
+		var item: Dictionary = item_value as Dictionary
+		var hero_id: String = str(item.get("id", ""))
+		if hero_id.is_empty():
+			push_error("[DataLoader] heroes item missing id")
+			continue
+		if result.has(hero_id):
+			push_error("[DataLoader] duplicated hero id=%s" % hero_id)
+			continue
+
+		result[hero_id] = item.duplicate(true)
+		hero_order.append(hero_id)
+
+	print("[DataLoader] load_heroes count=%d order=%s" % [result.size(), str(hero_order)])
 	return result
 
 

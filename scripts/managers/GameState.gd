@@ -28,6 +28,7 @@ var temperature_score: int = 0
 var weather_pressure: float = DEFAULT_WEATHER_PRESSURE
 var collected_resources: Dictionary = {}
 var buildings: Dictionary = {}
+var heroes: Dictionary = {}
 var job_assignments: Dictionary = {}
 var assigned_jobs_total: int = 0
 var scout_state: Dictionary = {}
@@ -52,6 +53,7 @@ func start_new_game() -> void:
 	weather_pressure = DEFAULT_WEATHER_PRESSURE
 	collected_resources = {}
 	buildings = _build_initial_buildings()
+	heroes = _build_initial_heroes()
 	job_assignments = _build_initial_job_assignments()
 	assigned_jobs_total = 0
 	scout_state = _build_initial_scout_state()
@@ -61,6 +63,7 @@ func start_new_game() -> void:
 	event_history = _build_initial_event_history()
 	battle_reports = []
 	_update_building_unlocks_for_day("start_new_game")
+	_update_hero_unlocks_for_day("start_new_game")
 	refresh_temperature_score("start_new_game")
 	refresh_shelter_status("start_new_game")
 	is_started = true
@@ -251,6 +254,7 @@ func advance_day(source: String) -> void:
 	_reset_daily_flags(source)
 	print("[GameState] advance_day source=%s before=%d after=%d phase=%s" % [source, before, day, phase])
 	_update_building_unlocks_for_day(source)
+	_update_hero_unlocks_for_day(source)
 	state_changed.emit()
 	quest_relevant_state_changed.emit()
 
@@ -645,6 +649,107 @@ func scout_region(region_id: String, source: String) -> bool:
 	return not before
 
 
+# 作用：获取指定英雄运行时状态。
+# 参数：hero_id 是英雄 id。
+# 返回：英雄状态 Dictionary；没有时返回空字典。
+func get_hero_state(hero_id: String) -> Dictionary:
+	var state: Dictionary = heroes.get(hero_id, {}) as Dictionary
+	return state.duplicate(true)
+
+
+# 作用：获取全部英雄运行时状态。
+# 参数：无。
+# 返回：英雄 id 到状态的深拷贝。
+func get_hero_states() -> Dictionary:
+	return heroes.duplicate(true)
+
+
+# 作用：判断指定英雄是否已加入当前战役。
+# 参数：hero_id 是英雄 id。
+# 返回：已加入返回 true，否则返回 false。
+func is_hero_unlocked(hero_id: String) -> bool:
+	var state: Dictionary = heroes.get(hero_id, {}) as Dictionary
+	return bool(state.get("is_unlocked", false))
+
+
+# 作用：判断指定英雄当前是否可派遣。
+# 参数：hero_id 是英雄 id。
+# 返回：可派遣返回 true，否则返回 false。
+func is_hero_available(hero_id: String) -> bool:
+	var state: Dictionary = heroes.get(hero_id, {}) as Dictionary
+	return bool(state.get("is_available", false))
+
+
+# 作用：获取指定英雄当前所在小队。
+# 参数：hero_id 是英雄 id。
+# 返回：小队 id；未编队时返回空字符串。
+func get_hero_assigned_squad_id(hero_id: String) -> String:
+	var state: Dictionary = heroes.get(hero_id, {}) as Dictionary
+	return str(state.get("assigned_squad_id", ""))
+
+
+# 作用：获取指定英雄当前伤病状态。
+# 参数：hero_id 是英雄 id。
+# 返回：伤病状态字符串；缺失时返回 healthy。
+func get_hero_injury_state(hero_id: String) -> String:
+	var state: Dictionary = heroes.get(hero_id, {}) as Dictionary
+	return str(state.get("injury_state", "healthy"))
+
+
+# 作用：设置指定英雄的可派遣状态。
+# 参数：hero_id 是英雄 id；is_available 是是否可派遣；source 是日志来源。
+# 返回：状态实际变化返回 true，否则返回 false。
+func set_hero_available(hero_id: String, is_available: bool, source: String) -> bool:
+	var state: Dictionary = _get_or_create_hero_state(hero_id)
+	var before: bool = bool(state.get("is_available", false))
+	state["is_available"] = is_available
+	heroes[hero_id] = state
+	print("[GameState] set_hero_available source=%s hero=%s before=%s after=%s" % [
+		source,
+		hero_id,
+		str(before),
+		str(is_available)
+	])
+	state_changed.emit()
+	return before != is_available
+
+
+# 作用：设置指定英雄的编队归属。
+# 参数：hero_id 是英雄 id；squad_id 是目标小队 id；source 是日志来源。
+# 返回：归属实际变化返回 true，否则返回 false。
+func set_hero_assigned_squad_id(hero_id: String, squad_id: String, source: String) -> bool:
+	var state: Dictionary = _get_or_create_hero_state(hero_id)
+	var before: String = str(state.get("assigned_squad_id", ""))
+	state["assigned_squad_id"] = squad_id
+	heroes[hero_id] = state
+	print("[GameState] set_hero_assigned_squad_id source=%s hero=%s before=%s after=%s" % [
+		source,
+		hero_id,
+		before,
+		squad_id
+	])
+	state_changed.emit()
+	return before != squad_id
+
+
+# 作用：设置指定英雄的伤病状态。
+# 参数：hero_id 是英雄 id；injury_state 是伤病状态；source 是日志来源。
+# 返回：状态实际变化返回 true，否则返回 false。
+func set_hero_injury_state(hero_id: String, injury_state: String, source: String) -> bool:
+	var state: Dictionary = _get_or_create_hero_state(hero_id)
+	var before: String = str(state.get("injury_state", "healthy"))
+	state["injury_state"] = injury_state
+	heroes[hero_id] = state
+	print("[GameState] set_hero_injury_state source=%s hero=%s before=%s after=%s" % [
+		source,
+		hero_id,
+		before,
+		injury_state
+	])
+	state_changed.emit()
+	return before != injury_state
+
+
 # 作用：判断指定区域是否已侦察。
 # 参数：region_id 是区域 id。
 # 返回：已侦察返回 true，否则返回 false。
@@ -889,6 +994,28 @@ func _build_initial_buildings() -> Dictionary:
 	return result
 
 
+# 作用：根据英雄配置生成新游戏初始英雄状态。
+# 参数：无。
+# 返回：英雄 id 到运行时状态的 Dictionary。
+func _build_initial_heroes() -> Dictionary:
+	var result: Dictionary = {}
+	var configs: Dictionary = DataLoader.get_hero_configs()
+
+	for hero_id_value: Variant in configs.keys():
+		var hero_id: String = str(hero_id_value)
+		var config: Dictionary = configs.get(hero_id, {}) as Dictionary
+		var join_day: int = int(config.get("join_day", 999))
+		var is_unlocked: bool = day >= join_day
+		result[hero_id] = {
+			"is_unlocked": is_unlocked,
+			"is_available": is_unlocked,
+			"assigned_squad_id": "",
+			"injury_state": "healthy"
+		}
+
+	return result
+
+
 # 作用：生成新游戏初始岗位分配。
 # 参数：无。
 # 返回：岗位 id 到人数的 Dictionary，所有岗位初始为 0。
@@ -979,6 +1106,21 @@ func _get_or_create_building_state(building_id: String) -> Dictionary:
 	return state
 
 
+# 作用：获取指定英雄状态，如果不存在则创建默认状态。
+# 参数：hero_id 是英雄 id。
+# 返回：英雄运行时状态 Dictionary。
+func _get_or_create_hero_state(hero_id: String) -> Dictionary:
+	var state: Dictionary = heroes.get(hero_id, {}) as Dictionary
+	if state.is_empty():
+		state = {
+			"is_unlocked": false,
+			"is_available": false,
+			"assigned_squad_id": "",
+			"injury_state": "healthy"
+		}
+	return state
+
+
 # 作用：根据温度、士气和病患情况生成营地状态文本。
 # 参数：无。
 # 返回：中文状态文案。
@@ -1031,6 +1173,46 @@ func _update_building_unlocks_for_day(source: String) -> void:
 
 	if changed:
 		quest_relevant_state_changed.emit()
+
+
+# 作用：按当前天数自动让达到 join_day 的英雄加入战役。
+# 参数：source 是日志来源。
+# 返回：无。有英雄加入时会刷新界面状态。
+func _update_hero_unlocks_for_day(source: String) -> void:
+	var configs: Dictionary = DataLoader.get_hero_configs()
+	var changed: bool = false
+
+	for hero_id_value: Variant in configs.keys():
+		var hero_id: String = str(hero_id_value)
+		var config: Dictionary = configs.get(hero_id, {}) as Dictionary
+		var join_day: int = int(config.get("join_day", 999))
+		if day < join_day:
+			continue
+
+		var state: Dictionary = heroes.get(hero_id, {}) as Dictionary
+		if state.is_empty():
+			state = {
+				"is_unlocked": false,
+				"is_available": false,
+				"assigned_squad_id": "",
+				"injury_state": "healthy"
+			}
+		if bool(state.get("is_unlocked", false)):
+			continue
+
+		state["is_unlocked"] = true
+		state["is_available"] = true
+		heroes[hero_id] = state
+		changed = true
+		print("[GameState] unlock_hero_by_day source=%s hero=%s join_day=%d current_day=%d" % [
+			source,
+			hero_id,
+			join_day,
+			day
+		])
+
+	if changed:
+		state_changed.emit()
 
 
 # 作用：按资源配置裁剪资源数量。
