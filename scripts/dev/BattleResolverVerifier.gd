@@ -25,6 +25,7 @@ func _run() -> void:
 	_verify_guard_team_vs_pioneer_team()
 	_verify_report_fields()
 	_verify_hero_exp_output()
+	_verify_hero_growth_and_equipment()
 	print("=== Battle Verification End ===")
 	print("")
 	get_tree().quit()
@@ -52,6 +53,9 @@ func _unlock_all_heroes() -> void:
 		hero_state["is_available"] = true
 		hero_state["assigned_squad_id"] = ""
 		hero_state["injury_state"] = "healthy"
+		hero_state["level"] = 1
+		hero_state["exp"] = 0
+		hero_state["equipped_item_id"] = ""
 		GameState.heroes[hero_id] = hero_state
 
 
@@ -175,6 +179,31 @@ func _verify_hero_exp_output() -> void:
 	print("[Check5] hero_exp win=%d lose=%d" % [
 		int(win_result.get("hero_exp", 0)),
 		int(lose_result.get("hero_exp", 0))
+	])
+
+
+# 作用：验证英雄经验、升级、装备加成与掉装库存是否生效。
+# 参数：无。
+# 返回：无。
+func _verify_hero_growth_and_equipment() -> void:
+	GameState.add_equipment_inventory("hunting_crossbow", 1, "battle_verifier")
+	HeroGrowthManager.equip_item("lin_che", "hunting_crossbow", "battle_verifier")
+	var before_preview: Dictionary = BattleResolver.preview_expedition("pioneer_team", "escort_scrap_yard")
+	var growth_results: Array[Dictionary] = HeroGrowthManager.apply_expedition_growth(["lin_che"], 10, "battle_verifier")
+	var after_level: int = GameState.get_hero_level("lin_che")
+	var after_exp: int = GameState.get_hero_exp("lin_che")
+	GameState.add_equipment_inventory("toolkit", 1, "battle_verifier")
+	HeroGrowthManager.equip_item("xu_yan", "toolkit", "battle_verifier")
+	var repair_preview: Dictionary = BattleResolver.preview_expedition("guard_team", "repair_border_beacon")
+	print("[Check6] growth_equipment battle_score=%d level=%d exp=%d growth=%s repair_bonus_score=%d crossbow_equipped=%s toolkit_equipped=%s inventory=%s" % [
+		int(before_preview.get("battle_score", 0)),
+		after_level,
+		after_exp,
+		str(growth_results),
+		int(repair_preview.get("battle_score", 0)),
+		GameState.get_hero_equipped_item_id("lin_che"),
+		GameState.get_hero_equipped_item_id("xu_yan"),
+		str(GameState.get_equipment_inventory())
 	])
 
 

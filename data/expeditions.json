@@ -16,6 +16,10 @@
       ],
       "food_cost": 4,
       "base_difficulty": 1,
+      "equipment_drop_chance": 0.15,
+      "equipment_drop_pool": [
+        "warm_coat"
+      ],
       "rewards": [
         {
           "effect_type": "state_change",
@@ -44,6 +48,11 @@
       ],
       "food_cost": 5,
       "base_difficulty": 2,
+      "equipment_drop_chance": 0.15,
+      "equipment_drop_pool": [
+        "toolkit",
+        "warm_coat"
+      ],
       "rewards": [
         {
           "effect_type": "resource_delta",
@@ -73,6 +82,11 @@
       ],
       "food_cost": 6,
       "base_difficulty": 3,
+      "equipment_drop_chance": 0.15,
+      "equipment_drop_pool": [
+        "warm_coat",
+        "toolkit"
+      ],
       "rewards": [
         {
           "effect_type": "resource_delta",
@@ -107,6 +121,10 @@
       ],
       "food_cost": 7,
       "base_difficulty": 4,
+      "equipment_drop_chance": 0.15,
+      "equipment_drop_pool": [
+        "hunting_crossbow"
+      ],
       "rewards": [
         {
           "effect_type": "state_change",
@@ -136,6 +154,10 @@
       ],
       "food_cost": 6,
       "base_difficulty": 3,
+      "equipment_drop_chance": 0.15,
+      "equipment_drop_pool": [
+        "hunting_crossbow"
+      ],
       "rewards": [
         {
           "effect_type": "resource_delta",
@@ -168,6 +190,10 @@
       ],
       "food_cost": 8,
       "base_difficulty": 5,
+      "equipment_drop_chance": 0.15,
+      "equipment_drop_pool": [
+        "toolkit"
+      ],
       "rewards": [
         {
           "effect_type": "beacon_delta",

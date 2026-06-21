@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "items": [
+    {
+      "id": "warm_coat",
+      "name": "暖衣",
+      "power_bonus": 0,
+      "safety_bonus": 1,
+      "gather_reward_multiplier": 0.0,
+      "repair_bonus": 0,
+      "outpost_bonus": 0,
+      "description": "厚实防寒衣物，提高小队安全，降低受伤。"
+    },
+    {
+      "id": "hunting_crossbow",
+      "name": "猎弩",
+      "power_bonus": 2,
+      "safety_bonus": 0,
+      "gather_reward_multiplier": 0.0,
+      "repair_bonus": 0,
+      "outpost_bonus": 0,
+      "description": "轻量远程武器，提高自动战斗战力。"
+    },
+    {
+      "id": "toolkit",
+      "name": "工具包",
+      "power_bonus": 0,
+      "safety_bonus": 0,
+      "gather_reward_multiplier": 0.2,
+      "repair_bonus": 1,
+      "outpost_bonus": 1,
+      "description": "提高采集效率，并强化修复和前哨建设表现。"
+    }
+  ]
+}

@@ -1,6 +1,13 @@
 extends Node
 
 
+# 作用：Autoload 初始化时为探险掉装随机数做一次种子初始化。
+# 参数：无。
+# 返回：无。
+func _ready() -> void:
+	randomize()
+
+
 # 作用：返回当前可用于展示或派遣的探险模板列表。
 # 参数：无。
 # 返回：按 DataLoader 顺序排列的探险配置数组。
@@ -115,6 +122,9 @@ func _apply_expedition_result(expedition_id: String, result: Dictionary) -> void
 	var final_resource_reward: Dictionary = result.get("resource_reward", {}) as Dictionary
 	var wounds: int = int(result.get("wounds", 0))
 	var hope_delta: int = int(result.get("hope_delta", 0))
+	var state: Dictionary = GameState.get_expedition_state(expedition_id)
+	var squad_id: String = str(state.get("squad_id", ""))
+	var hero_ids: Array[String] = GameState.get_squad_hero_ids(squad_id)
 	if hope_delta != 0:
 		GameState.add_resource("hope", hope_delta, "expedition_result")
 
@@ -151,6 +161,21 @@ func _apply_expedition_result(expedition_id: String, result: Dictionary) -> void
 				_:
 					push_error("[ExpeditionManager] unsupported reward effect_type=%s expedition=%s" % [effect_type, expedition_id])
 
+		var growth_results: Array[Dictionary] = HeroGrowthManager.apply_expedition_growth(
+			hero_ids,
+			int(result.get("hero_exp", 0)),
+			"expedition_growth"
+		)
+		if not growth_results.is_empty():
+			result["growth_results"] = growth_results
+			_append_growth_report_lines(result, growth_results)
+
+		var dropped_equipment_id: String = _roll_equipment_drop(config)
+		if not dropped_equipment_id.is_empty():
+			GameState.add_equipment_inventory(dropped_equipment_id, 1, "expedition_equipment_drop")
+			result["equipment_drop_id"] = dropped_equipment_id
+			_append_equipment_drop_report_line(result, dropped_equipment_id)
+
 	_apply_expedition_wounds(expedition_id, wounds)
 
 
@@ -170,3 +195,62 @@ func _apply_expedition_wounds(expedition_id: String, wounds: int) -> void:
 		if GameState.get_hero_injury_state(hero_id) == "healthy":
 			GameState.set_hero_injury_state(hero_id, "light_wound", "expedition_injury")
 			applied_count += 1
+
+
+# 作用：按探险配置决定本次是否掉落装备。
+# 参数：config 是探险静态配置。
+# 返回：掉落的装备 id；未掉落时返回空字符串。
+func _roll_equipment_drop(config: Dictionary) -> String:
+	var drop_chance: float = float(config.get("equipment_drop_chance", 0.0))
+	if drop_chance <= 0.0:
+		return ""
+	if randf() > drop_chance:
+		return ""
+
+	var pool_values: Array = config.get("equipment_drop_pool", []) as Array
+	if pool_values.is_empty():
+		return ""
+	var index: int = randi_range(0, pool_values.size() - 1)
+	return str(pool_values[index])
+
+
+# 作用：把成长结果转成战报文本，便于 BattleReportPanel 直接展示。
+# 参数：result 是本次探险结果；growth_results 是成长结果数组。
+# 返回：无。
+func _append_growth_report_lines(result: Dictionary, growth_results: Array[Dictionary]) -> void:
+	var report_lines: Array[String] = _to_string_array(result.get("report_lines", []))
+	for growth_value: Dictionary in growth_results:
+		var hero_id: String = str(growth_value.get("hero_id", ""))
+		var hero_name: String = str(DataLoader.get_hero_config(hero_id).get("name", hero_id))
+		var exp_gain: int = int(growth_value.get("exp_gain", 0))
+		var after_level: int = int(growth_value.get("after_level", 1))
+		var level_ups: int = int(growth_value.get("level_ups", 0))
+		if level_ups > 0:
+			report_lines.append("成长：%s 获得 %d 经验，升到 %d 级" % [hero_name, exp_gain, after_level])
+		else:
+			report_lines.append("成长：%s 获得 %d 经验" % [hero_name, exp_gain])
+	result["report_lines"] = report_lines
+	result["lines"] = report_lines
+
+
+# 作用：把装备掉落写进战报文本。
+# 参数：result 是本次探险结果；equipment_id 是掉落装备 id。
+# 返回：无。
+func _append_equipment_drop_report_line(result: Dictionary, equipment_id: String) -> void:
+	var report_lines: Array[String] = _to_string_array(result.get("report_lines", []))
+	report_lines.append("奖励追加：获得装备 %s" % DataLoader.get_equipment_name(equipment_id))
+	result["report_lines"] = report_lines
+	result["lines"] = report_lines
+
+
+# 作用：把任意数组安全转成字符串数组。
+# 参数：value 是任意值。
+# 返回：字符串数组。
+func _to_string_array(value: Variant) -> Array[String]:
+	var result: Array[String] = []
+	if typeof(value) != TYPE_ARRAY:
+		return result
+	var raw_values: Array = value as Array
+	for item_value: Variant in raw_values:
+		result.append(str(item_value))
+	return result

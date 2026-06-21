@@ -29,6 +29,7 @@ var weather_pressure: float = DEFAULT_WEATHER_PRESSURE
 var collected_resources: Dictionary = {}
 var buildings: Dictionary = {}
 var heroes: Dictionary = {}
+var equipment_inventory: Dictionary = {}
 var squads: Dictionary = {}
 var job_assignments: Dictionary = {}
 var assigned_jobs_total: int = 0
@@ -57,6 +58,7 @@ func start_new_game() -> void:
 	collected_resources = {}
 	buildings = _build_initial_buildings()
 	heroes = _build_initial_heroes()
+	equipment_inventory = _build_initial_equipment_inventory()
 	squads = _build_initial_squads()
 	job_assignments = _build_initial_job_assignments()
 	assigned_jobs_total = 0
@@ -264,6 +266,30 @@ func advance_day(source: String) -> void:
 	_update_hero_unlocks_for_day(source)
 	state_changed.emit()
 	quest_relevant_state_changed.emit()
+
+
+# 作用：直接把当前战役设置到目标天数，并同步白天阶段、解锁状态和每日标记。
+# 参数：target_day 是目标天数；source 是日志来源。
+# 返回：天数实际发生变化返回 true，否则返回 false。
+func set_day(target_day: int, source: String) -> bool:
+	ensure_started()
+	var before: int = day
+	day = max(target_day, 1)
+	phase = "day"
+	_reset_daily_flags(source)
+	_update_building_unlocks_for_day(source)
+	_update_hero_unlocks_for_day(source)
+	refresh_temperature_score("set_day:%s" % source)
+	refresh_shelter_status("set_day:%s" % source)
+	print("[GameState] set_day source=%s before=%d after=%d phase=%s" % [
+		source,
+		before,
+		day,
+		phase
+	])
+	state_changed.emit()
+	quest_relevant_state_changed.emit()
+	return before != day
 
 
 # 作用：记录某种资源已经被玩家至少收取过一次。
@@ -656,6 +682,34 @@ func scout_region(region_id: String, source: String) -> bool:
 	return not before
 
 
+# 作用：直接设置区域是否已侦察，供开发调试和状态恢复复用。
+# 参数：region_id 是区域 id；is_scouted 是目标侦察状态；source 是日志来源。
+# 返回：侦察状态实际变化返回 true，否则返回 false。
+func set_region_scouted(region_id: String, is_scouted: bool, source: String) -> bool:
+	var state: Dictionary = regions.get(region_id, {}) as Dictionary
+	if state.is_empty():
+		state = {
+			"current_owner": "neutral",
+			"current_danger_level": 0,
+			"is_scouted": false,
+			"has_outpost": false,
+			"outpost_hp": 0,
+			"is_enemy_target": false
+		}
+	var before: bool = bool(state.get("is_scouted", false))
+	state["is_scouted"] = is_scouted
+	regions[region_id] = state
+	print("[GameState] set_region_scouted source=%s region=%s before=%s after=%s" % [
+		source,
+		region_id,
+		str(before),
+		str(is_scouted)
+	])
+	quest_relevant_state_changed.emit()
+	state_changed.emit()
+	return before != is_scouted
+
+
 # 作用：获取指定英雄运行时状态。
 # 参数：hero_id 是英雄 id。
 # 返回：英雄状态 Dictionary；没有时返回空字典。
@@ -703,6 +757,147 @@ func get_hero_injury_state(hero_id: String) -> String:
 	return str(state.get("injury_state", "healthy"))
 
 
+# 作用：获取指定英雄当前等级。
+# 参数：hero_id 是英雄 id。
+# 返回：英雄等级；缺失时返回 1。
+func get_hero_level(hero_id: String) -> int:
+	var state: Dictionary = heroes.get(hero_id, {}) as Dictionary
+	return int(state.get("level", 1))
+
+
+# 作用：获取指定英雄当前经验。
+# 参数：hero_id 是英雄 id。
+# 返回：英雄经验；缺失时返回 0。
+func get_hero_exp(hero_id: String) -> int:
+	var state: Dictionary = heroes.get(hero_id, {}) as Dictionary
+	return int(state.get("exp", 0))
+
+
+# 作用：获取指定英雄当前装备 id。
+# 参数：hero_id 是英雄 id。
+# 返回：装备 id；未装备时返回空字符串。
+func get_hero_equipped_item_id(hero_id: String) -> String:
+	var state: Dictionary = heroes.get(hero_id, {}) as Dictionary
+	return str(state.get("equipped_item_id", ""))
+
+
+# 作用：设置指定英雄的加入状态，并同步可派遣状态和编队归属。
+# 参数：hero_id 是英雄 id；is_unlocked 是是否加入；source 是日志来源。
+# 返回：加入状态实际变化返回 true，否则返回 false。
+func set_hero_unlocked(hero_id: String, is_unlocked: bool, source: String) -> bool:
+	var state: Dictionary = _get_or_create_hero_state(hero_id)
+	var before: bool = bool(state.get("is_unlocked", false))
+	var assigned_squad_id: String = str(state.get("assigned_squad_id", ""))
+	if not is_unlocked and not assigned_squad_id.is_empty():
+		var squad_state: Dictionary = _get_or_create_squad_state(assigned_squad_id)
+		var hero_ids: Array[String] = get_squad_hero_ids(assigned_squad_id)
+		hero_ids.erase(hero_id)
+		squad_state["hero_ids"] = hero_ids
+		squads[assigned_squad_id] = squad_state
+		state["assigned_squad_id"] = ""
+
+	state["is_unlocked"] = is_unlocked
+	state["is_available"] = is_unlocked and str(state.get("injury_state", "healthy")) == "healthy"
+	heroes[hero_id] = state
+	print("[GameState] set_hero_unlocked source=%s hero=%s before=%s after=%s" % [
+		source,
+		hero_id,
+		str(before),
+		str(is_unlocked)
+	])
+	state_changed.emit()
+	quest_relevant_state_changed.emit()
+	return before != is_unlocked
+
+
+# 作用：设置指定英雄当前等级。
+# 参数：hero_id 是英雄 id；level 是目标等级；source 是日志来源。
+# 返回：等级是否实际发生变化。
+func set_hero_level(hero_id: String, level: int, source: String) -> bool:
+	var state: Dictionary = _get_or_create_hero_state(hero_id)
+	var before: int = int(state.get("level", 1))
+	var after: int = max(level, 1)
+	state["level"] = after
+	heroes[hero_id] = state
+	print("[GameState] set_hero_level source=%s hero=%s before=%d after=%d" % [
+		source,
+		hero_id,
+		before,
+		after
+	])
+	state_changed.emit()
+	return before != after
+
+
+# 作用：设置指定英雄当前经验。
+# 参数：hero_id 是英雄 id；exp 是目标经验；source 是日志来源。
+# 返回：经验是否实际发生变化。
+func set_hero_exp(hero_id: String, exp: int, source: String) -> bool:
+	var state: Dictionary = _get_or_create_hero_state(hero_id)
+	var before: int = int(state.get("exp", 0))
+	var after: int = max(exp, 0)
+	state["exp"] = after
+	heroes[hero_id] = state
+	print("[GameState] set_hero_exp source=%s hero=%s before=%d after=%d" % [
+		source,
+		hero_id,
+		before,
+		after
+	])
+	state_changed.emit()
+	return before != after
+
+
+# 作用：设置指定英雄当前装备。
+# 参数：hero_id 是英雄 id；equipment_id 是装备 id；source 是日志来源。
+# 返回：装备是否实际发生变化。
+func set_hero_equipped_item_id(hero_id: String, equipment_id: String, source: String) -> bool:
+	var state: Dictionary = _get_or_create_hero_state(hero_id)
+	var before: String = str(state.get("equipped_item_id", ""))
+	state["equipped_item_id"] = equipment_id
+	heroes[hero_id] = state
+	print("[GameState] set_hero_equipped_item_id source=%s hero=%s before=%s after=%s" % [
+		source,
+		hero_id,
+		before,
+		equipment_id
+	])
+	state_changed.emit()
+	return before != equipment_id
+
+
+# 作用：获取当前装备库存的深拷贝。
+# 参数：无。
+# 返回：装备 id 到数量的字典。
+func get_equipment_inventory() -> Dictionary:
+	return equipment_inventory.duplicate(true)
+
+
+# 作用：获取指定装备当前库存数量。
+# 参数：equipment_id 是装备 id。
+# 返回：库存数量；缺失时返回 0。
+func get_equipment_inventory_amount(equipment_id: String) -> int:
+	return int(equipment_inventory.get(equipment_id, 0))
+
+
+# 作用：增加或减少指定装备库存。
+# 参数：equipment_id 是装备 id；amount 是增量；source 是日志来源。
+# 返回：变更后的库存数量。
+func add_equipment_inventory(equipment_id: String, amount: int, source: String) -> int:
+	var before: int = int(equipment_inventory.get(equipment_id, 0))
+	var after: int = max(before + amount, 0)
+	equipment_inventory[equipment_id] = after
+	print("[GameState] add_equipment_inventory source=%s equipment=%s amount=%d before=%d after=%d" % [
+		source,
+		equipment_id,
+		amount,
+		before,
+		after
+	])
+	state_changed.emit()
+	return after
+
+
 # 作用：获取信标运行时状态。
 # 参数：无。
 # 返回：信标状态 Dictionary 的深拷贝。
@@ -723,6 +918,23 @@ func set_beacon_value(key: String, value: Variant, source: String) -> void:
 		str(value)
 	])
 	state_changed.emit()
+
+
+# 作用：设置天气压力，并立即同步刷新温度评分。
+# 参数：value 是目标天气压力；source 是日志来源。
+# 返回：天气压力实际变化返回 true，否则返回 false。
+func set_weather_pressure(value: float, source: String) -> bool:
+	ensure_started()
+	var before: float = weather_pressure
+	weather_pressure = max(value, 0.0)
+	print("[GameState] set_weather_pressure source=%s before=%.1f after=%.1f" % [
+		source,
+		before,
+		weather_pressure
+	])
+	refresh_temperature_score("set_weather_pressure:%s" % source)
+	state_changed.emit()
+	return not is_equal_approx(before, weather_pressure)
 
 
 # 作用：获取指定小队运行时状态。
@@ -1132,6 +1344,45 @@ func clear_squad_heroes(squad_id: String, source: String) -> bool:
 	])
 	state_changed.emit()
 	return true
+
+
+# 作用：清空全部小队编成与探险占位，供开发调试和状态重建复用。
+# 参数：source 是日志来源。
+# 返回：有任一小队或探险状态发生变化返回 true。
+func clear_all_squads(source: String) -> bool:
+	var changed: bool = false
+	var squad_order: Array[String] = DataLoader.get_squad_order()
+	for squad_id: String in squad_order:
+		var state: Dictionary = _get_or_create_squad_state(squad_id)
+		var hero_ids: Array[String] = get_squad_hero_ids(squad_id)
+		if not hero_ids.is_empty():
+			changed = true
+		for hero_id: String in hero_ids:
+			set_hero_assigned_squad_id(hero_id, "", source)
+			if is_hero_unlocked(hero_id):
+				set_hero_available(hero_id, true, source)
+			else:
+				set_hero_available(hero_id, false, source)
+		if str(state.get("status", "idle")) != "idle":
+			changed = true
+		if str(state.get("assigned_task_id", "")) != "":
+			changed = true
+		if bool(state.get("acted_today", false)):
+			changed = true
+		state["hero_ids"] = []
+		state["status"] = "idle"
+		state["assigned_task_id"] = ""
+		state["acted_today"] = false
+		squads[squad_id] = state
+
+	if not expeditions.is_empty():
+		changed = true
+		expeditions = {}
+
+	if changed:
+		print("[GameState] clear_all_squads source=%s" % source)
+		state_changed.emit()
+	return changed
 
 
 # 作用：判断指定小队当前是否可出发。
@@ -1602,8 +1853,25 @@ func _build_initial_heroes() -> Dictionary:
 			"is_unlocked": is_unlocked,
 			"is_available": is_unlocked,
 			"assigned_squad_id": "",
-			"injury_state": "healthy"
+			"injury_state": "healthy",
+			"level": 1,
+			"exp": 0,
+			"equipped_item_id": ""
 		}
+
+	return result
+
+
+# 作用：根据装备配置生成新游戏初始装备库存。
+# 参数：无。
+# 返回：装备 id 到库存数量的 Dictionary，默认都为 0。
+func _build_initial_equipment_inventory() -> Dictionary:
+	var result: Dictionary = {}
+	var configs: Dictionary = DataLoader.get_equipment_configs()
+
+	for equipment_id_value: Variant in configs.keys():
+		var equipment_id: String = str(equipment_id_value)
+		result[equipment_id] = 0
 
 	return result
 
@@ -1789,7 +2057,10 @@ func _get_or_create_hero_state(hero_id: String) -> Dictionary:
 			"is_unlocked": false,
 			"is_available": false,
 			"assigned_squad_id": "",
-			"injury_state": "healthy"
+			"injury_state": "healthy",
+			"level": 1,
+			"exp": 0,
+			"equipped_item_id": ""
 		}
 	return state
 
@@ -1900,7 +2171,10 @@ func _update_hero_unlocks_for_day(source: String) -> void:
 				"is_unlocked": false,
 				"is_available": false,
 				"assigned_squad_id": "",
-				"injury_state": "healthy"
+				"injury_state": "healthy",
+				"level": 1,
+				"exp": 0,
+				"equipped_item_id": ""
 			}
 		if bool(state.get("is_unlocked", false)):
 			continue

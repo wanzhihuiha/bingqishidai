@@ -141,7 +141,7 @@ func _refresh_card(building_id: String) -> void:
 	if title == null or status == null or current_effect == null or next_cost == null or next_benefit == null or feature == null or button == null:
 		return
 
-	title.text = "%s  Lv.%d / %d" % [building_name, current_level, max_level]
+	title.text = "%s  %d 级 / %d 级" % [building_name, current_level, max_level]
 	if not is_unlocked:
 		status.text = BuildingManager.get_unlock_reason_text(building_id)
 		current_effect.text = "当前效果：未生效"

@@ -5,6 +5,7 @@ const SURVIVORS_PATH: String = "res://data/survivors.json"
 const JOBS_PATH: String = "res://data/jobs.json"
 const BUILDINGS_PATH: String = "res://data/buildings.json"
 const HEROES_PATH: String = "res://data/heroes.json"
+const EQUIPMENT_PATH: String = "res://data/equipment.json"
 const SQUADS_PATH: String = "res://data/squads.json"
 const EXPEDITIONS_PATH: String = "res://data/expeditions.json"
 const BATTLE_RULES_PATH: String = "res://data/battle_rules.json"
@@ -21,6 +22,8 @@ var building_configs: Dictionary = {}
 var building_order: Array[String] = []
 var hero_configs: Dictionary = {}
 var hero_order: Array[String] = []
+var equipment_configs: Dictionary = {}
+var equipment_order: Array[String] = []
 var squad_configs: Dictionary = {}
 var squad_order: Array[String] = []
 var expedition_configs: Dictionary = {}
@@ -49,18 +52,20 @@ func load_all() -> void:
 	job_configs = _load_job_configs()
 	building_configs = _load_building_configs()
 	hero_configs = _load_hero_configs()
+	equipment_configs = _load_equipment_configs()
 	squad_configs = _load_squad_configs()
 	expedition_configs = _load_expedition_configs()
 	battle_rules_config = _load_battle_rules_config()
 	quest_configs = _load_quest_configs()
 	region_configs = _load_region_configs()
 	event_configs = _load_event_configs()
-	print("[DataLoader] load_all resources=%d survivor_config=%s jobs=%d buildings=%d heroes=%d squads=%d expeditions=%d quests=%d events=%d" % [
+	print("[DataLoader] load_all resources=%d survivor_config=%s jobs=%d buildings=%d heroes=%d equipment=%d squads=%d expeditions=%d quests=%d events=%d" % [
 		resource_configs.size(),
 		str(not survivor_config.is_empty()),
 		job_configs.size(),
 		building_configs.size(),
 		hero_configs.size(),
+		equipment_configs.size(),
 		squad_configs.size(),
 		expedition_configs.size(),
 		quest_configs.size(),
@@ -171,6 +176,36 @@ func get_hero_config(hero_id: String) -> Dictionary:
 	return config.duplicate(true)
 
 
+# 作用：获取所有装备配置的深拷贝。
+# 参数：无。
+# 返回：装备 id 到装备配置 Dictionary 的映射。
+func get_equipment_configs() -> Dictionary:
+	return equipment_configs.duplicate(true)
+
+
+# 作用：获取装备显示顺序。
+# 参数：无。
+# 返回：装备 id 数组。
+func get_equipment_order() -> Array[String]:
+	return equipment_order.duplicate()
+
+
+# 作用：按装备 id 获取装备配置。
+# 参数：equipment_id 是装备 id，例如 warm_coat。
+# 返回：装备配置 Dictionary；找不到时返回空字典。
+func get_equipment_config(equipment_id: String) -> Dictionary:
+	var config: Dictionary = equipment_configs.get(equipment_id, {}) as Dictionary
+	return config.duplicate(true)
+
+
+# 作用：按装备 id 获取装备中文名。
+# 参数：equipment_id 是装备 id。
+# 返回：装备中文名；缺失时返回装备 id。
+func get_equipment_name(equipment_id: String) -> String:
+	var config: Dictionary = equipment_configs.get(equipment_id, {}) as Dictionary
+	return str(config.get("name", equipment_id))
+
+
 # 作用：获取所有小队静态配置的深拷贝。
 # 参数：无。
 # 返回：小队 id 到小队配置 Dictionary 的映射。
@@ -193,6 +228,14 @@ func get_squad_config(squad_id: String) -> Dictionary:
 	return config.duplicate(true)
 
 
+# 作用：按小队 id 获取小队中文名。
+# 参数：squad_id 是小队 id。
+# 返回：小队中文名；缺失时返回小队 id。
+func get_squad_name(squad_id: String) -> String:
+	var config: Dictionary = squad_configs.get(squad_id, {}) as Dictionary
+	return str(config.get("name", squad_id))
+
+
 # 作用：获取所有探险模板配置。
 # 参数：无。
 # 返回：探险 id 到探险配置 Dictionary 的映射。
@@ -213,6 +256,14 @@ func get_expedition_order() -> Array[String]:
 func get_expedition_config(expedition_id: String) -> Dictionary:
 	var config: Dictionary = expedition_configs.get(expedition_id, {}) as Dictionary
 	return config.duplicate(true)
+
+
+# 作用：按探险 id 获取探险中文标题。
+# 参数：expedition_id 是探险模板 id。
+# 返回：探险标题；缺失时返回探险 id。
+func get_expedition_name(expedition_id: String) -> String:
+	var config: Dictionary = expedition_configs.get(expedition_id, {}) as Dictionary
+	return str(config.get("title", expedition_id))
 
 
 # 作用：获取自动战斗规则配置。
@@ -250,6 +301,14 @@ func get_quest_config(quest_id: String) -> Dictionary:
 func get_region_config(region_id: String) -> Dictionary:
 	var config: Dictionary = region_configs.get(region_id, {}) as Dictionary
 	return config.duplicate(true)
+
+
+# 作用：按区域 id 获取区域中文名。
+# 参数：region_id 是区域 id。
+# 返回：区域中文名；缺失时返回区域 id。
+func get_region_name(region_id: String) -> String:
+	var config: Dictionary = region_configs.get(region_id, {}) as Dictionary
+	return str(config.get("name", region_id))
 
 
 # 作用：获取所有冰原区域配置。
@@ -415,6 +474,36 @@ func _load_hero_configs() -> Dictionary:
 		hero_order.append(hero_id)
 
 	print("[DataLoader] load_heroes count=%d order=%s" % [result.size(), str(hero_order)])
+	return result
+
+
+# 作用：从 equipment.json 加载装备配置，并建立装备顺序。
+# 参数：无。
+# 返回：装备 id 到装备配置的 Dictionary；非法条目会被跳过。
+func _load_equipment_configs() -> Dictionary:
+	equipment_order.clear()
+	var data: Dictionary = _load_json_dictionary(EQUIPMENT_PATH)
+	var items: Array = data.get("items", []) as Array
+	var result: Dictionary = {}
+
+	for item_value: Variant in items:
+		if typeof(item_value) != TYPE_DICTIONARY:
+			push_error("[DataLoader] equipment item is not dictionary")
+			continue
+
+		var item: Dictionary = item_value as Dictionary
+		var equipment_id: String = str(item.get("id", ""))
+		if equipment_id.is_empty():
+			push_error("[DataLoader] equipment item missing id")
+			continue
+		if result.has(equipment_id):
+			push_error("[DataLoader] duplicated equipment id=%s" % equipment_id)
+			continue
+
+		result[equipment_id] = item.duplicate(true)
+		equipment_order.append(equipment_id)
+
+	print("[DataLoader] load_equipment count=%d order=%s" % [result.size(), str(equipment_order)])
 	return result
 
 

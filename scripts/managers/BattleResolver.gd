@@ -1,7 +1,7 @@
 extends Node
 
-const DEFAULT_HERO_EXP_VICTORY: int = 10
-const DEFAULT_HERO_EXP_FAILURE: int = 4
+const DEFAULT_HERO_EXP_VICTORY: int = 6
+const DEFAULT_HERO_EXP_FAILURE: int = 0
 
 
 # 作用：根据探险配置和当前小队状态结算一次自动战斗。
@@ -38,6 +38,7 @@ func resolve_battle(input: Dictionary) -> Dictionary:
 	var hope_delta: int = int(input.get("hope_delta", 0))
 	var hero_exp_victory: int = int(input.get("hero_exp_victory", DEFAULT_HERO_EXP_VICTORY))
 	var hero_exp_failure: int = int(input.get("hero_exp_failure", DEFAULT_HERO_EXP_FAILURE))
+	var success_exp: int = int(input.get("success_exp", 0))
 	var resource_reward: Dictionary = input.get("resource_reward", {}) as Dictionary
 	var extra_resource_rewards: Dictionary = input.get("extra_resource_rewards", {}) as Dictionary
 	var report_prefix_lines: Array[String] = _to_string_array(input.get("report_prefix_lines", []))
@@ -63,7 +64,7 @@ func resolve_battle(input: Dictionary) -> Dictionary:
 			"victory": true,
 			"wounds": 0,
 			"resource_reward": preview_reward,
-			"hero_exp": hero_exp_victory,
+			"hero_exp": success_exp,
 			"report_lines": skip_lines,
 			"lines": skip_lines,
 			"outcome_id": "success",
@@ -92,7 +93,7 @@ func resolve_battle(input: Dictionary) -> Dictionary:
 	if not victory:
 		final_reward_multiplier = 0.0
 	var final_reward: Dictionary = _scale_resource_reward(resource_reward, final_reward_multiplier, extra_resource_rewards)
-	var hero_exp: int = hero_exp_victory
+	var hero_exp: int = success_exp + hero_exp_victory
 	var outcome_id: String = "success"
 	var outcome_name: String = "成功"
 	if not victory:
@@ -192,6 +193,9 @@ func _build_result(squad_id: String, expedition_id: String, is_preview: bool = f
 		"resource_reward": resource_reward,
 		"extra_resource_rewards": extra_resource_rewards,
 		"hope_delta": _get_hope_delta(outcome_name),
+		"success_exp": HeroGrowthManager.get_success_exp_reward(),
+		"hero_exp_victory": HeroGrowthManager.get_battle_victory_exp_reward(),
+		"hero_exp_failure": 0,
 		"report_prefix_lines": report_prefix_lines,
 		"skips_battle": _can_skip_battle(expedition_config, target_region_id)
 	}
@@ -218,6 +222,8 @@ func _calculate_squad_power(
 	for hero_id: String in hero_ids:
 		var hero_config: Dictionary = DataLoader.get_hero_config(hero_id)
 		power += int(hero_config.get("base_power", 0))
+		power += HeroGrowthManager.get_level_power_bonus(hero_id)
+		power += HeroGrowthManager.get_equipment_power_bonus(hero_id)
 
 	power += int(squad_config.get("power_bonus", 0))
 	power += _get_training_ground_bonus()
@@ -283,16 +289,39 @@ func _calculate_hero_bonus(
 	for hero_id: String in hero_ids:
 		var hero_config: Dictionary = DataLoader.get_hero_config(hero_id)
 		var tags: Array = hero_config.get("specialty_tags", []) as Array
+		var primary_tag: String = ""
+		var primary_bonus_applied: bool = false
+		if not tags.is_empty():
+			primary_tag = str(tags[0])
+		var primary_bonus: int = HeroGrowthManager.get_primary_specialty_bonus(hero_id)
 		for tag_value: Variant in tags:
 			var tag: String = str(tag_value)
 			if squad_id == "pioneer_team" and tag == "scout":
 				bonus += 1
+				if tag == primary_tag:
+					bonus += primary_bonus
+					primary_bonus_applied = true
 			elif squad_id == "guard_team" and tag == "guard":
 				bonus += 1
+				if tag == primary_tag:
+					bonus += primary_bonus
+					primary_bonus_applied = true
 			elif squad_id == "rescue_team" and tag == "rescue":
 				bonus += 1
+				if tag == primary_tag:
+					bonus += primary_bonus
+					primary_bonus_applied = true
 		if squad_id == "rescue_team" and tags.has("medical"):
 			bonus += 1
+			if primary_tag == "medical":
+				bonus += primary_bonus
+				primary_bonus_applied = true
+		if not primary_bonus_applied and action_tags.has(primary_tag):
+			bonus += primary_bonus
+		var expedition_type: String = str(expedition_config.get("type", ""))
+		if expedition_type == "repair":
+			bonus += HeroGrowthManager.get_equipment_repair_bonus(hero_id)
+			bonus += HeroGrowthManager.get_equipment_outpost_bonus(hero_id)
 		var event_bonuses: Array = hero_config.get("event_bonus", []) as Array
 		for bonus_value: Variant in event_bonuses:
 			if typeof(bonus_value) != TYPE_DICTIONARY:
@@ -323,6 +352,9 @@ func _get_reward_multiplier(squad_id: String, expedition_config: Dictionary) -> 
 		reward_multiplier += float(success_bonus_tags.get("gather", 0.0))
 	elif success_bonus_tags.has("explore"):
 		reward_multiplier += float(success_bonus_tags.get("explore", 0.0))
+	var hero_ids: Array[String] = GameState.get_squad_hero_ids(squad_id)
+	for hero_id: String in hero_ids:
+		reward_multiplier += HeroGrowthManager.get_equipment_gather_reward_multiplier(hero_id)
 	return reward_multiplier
 
 
@@ -348,6 +380,7 @@ func _calculate_squad_safety(squad_id: String, hero_ids: Array[String]) -> int:
 			safety += 1
 		if tags.has("medical"):
 			safety += 1
+		safety += HeroGrowthManager.get_equipment_safety_bonus(hero_id)
 	return safety
 
 

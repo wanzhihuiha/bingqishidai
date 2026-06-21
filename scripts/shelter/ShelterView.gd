@@ -11,10 +11,12 @@ const RESOURCE_NAMES: Dictionary = {
 }
 const HERO_SPECIALTY_NAMES: Dictionary = {
 	"scout": "侦察",
+	"gather": "采集",
 	"explore": "开路",
 	"repair": "修复",
 	"outpost": "前哨建设",
 	"guard": "护卫",
+	"escort": "护送",
 	"intercept": "拦截",
 	"medical": "医疗支援",
 	"rescue": "搜救"
@@ -77,6 +79,7 @@ var report_labels: Array[Label] = []
 var hero_panel: PanelContainer
 var hero_list_box: VBoxContainer
 var hero_empty_label: Label
+var equipment_inventory_label: Label
 var hero_rows: Dictionary = {}
 var squad_list_box: VBoxContainer
 var squad_rows: Dictionary = {}
@@ -412,6 +415,10 @@ func _make_hero_panel() -> PanelContainer:
 	hero_empty_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(hero_empty_label)
 
+	equipment_inventory_label = Label.new()
+	equipment_inventory_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(equipment_inventory_label)
+
 	hero_list_box = VBoxContainer.new()
 	hero_list_box.add_theme_constant_override("separation", 10)
 	box.add_child(hero_list_box)
@@ -543,9 +550,50 @@ func _make_hero_card(hero_id: String) -> PanelContainer:
 	tags_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	info_box.add_child(tags_label)
 
+	var level_label: Label = Label.new()
+	info_box.add_child(level_label)
+
+	var exp_label: Label = Label.new()
+	info_box.add_child(exp_label)
+
+	var exp_bar_label: Label = Label.new()
+	info_box.add_child(exp_bar_label)
+
+	var equipment_label: Label = Label.new()
+	equipment_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	info_box.add_child(equipment_label)
+
 	var status_label: Label = Label.new()
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	info_box.add_child(status_label)
+
+	var equip_actions: HBoxContainer = HBoxContainer.new()
+	equip_actions.add_theme_constant_override("separation", 6)
+	info_box.add_child(equip_actions)
+
+	var unequip_button: Button = Button.new()
+	unequip_button.text = "卸下"
+	unequip_button.custom_minimum_size = Vector2(74, 30)
+	unequip_button.pressed.connect(_on_unequip_item_pressed.bind(hero_id))
+	equip_actions.add_child(unequip_button)
+
+	var warm_coat_button: Button = Button.new()
+	warm_coat_button.text = "暖衣"
+	warm_coat_button.custom_minimum_size = Vector2(74, 30)
+	warm_coat_button.pressed.connect(_on_equip_item_pressed.bind(hero_id, "warm_coat"))
+	equip_actions.add_child(warm_coat_button)
+
+	var crossbow_button: Button = Button.new()
+	crossbow_button.text = "猎弩"
+	crossbow_button.custom_minimum_size = Vector2(74, 30)
+	crossbow_button.pressed.connect(_on_equip_item_pressed.bind(hero_id, "hunting_crossbow"))
+	equip_actions.add_child(crossbow_button)
+
+	var toolkit_button: Button = Button.new()
+	toolkit_button.text = "工具包"
+	toolkit_button.custom_minimum_size = Vector2(74, 30)
+	toolkit_button.pressed.connect(_on_equip_item_pressed.bind(hero_id, "toolkit"))
+	equip_actions.add_child(toolkit_button)
 
 	hero_rows[hero_id] = {
 		"card": card,
@@ -553,7 +601,15 @@ func _make_hero_card(hero_id: String) -> PanelContainer:
 		"name": name_label,
 		"role": role_label,
 		"tags": tags_label,
-		"status": status_label
+		"level": level_label,
+		"exp": exp_label,
+		"exp_bar": exp_bar_label,
+		"equipment": equipment_label,
+		"status": status_label,
+		"unequip": unequip_button,
+		"warm_coat": warm_coat_button,
+		"crossbow": crossbow_button,
+		"toolkit": toolkit_button
 	}
 	return card
 
@@ -1027,9 +1083,13 @@ func _refresh_hero_panel() -> void:
 	squad_list_box.visible = can_show
 	if not can_show:
 		hero_empty_label.text = "训练场 1 级后解锁英雄小队入口。"
+		if equipment_inventory_label != null:
+			equipment_inventory_label.text = ""
 		return
 
-	hero_empty_label.text = "已加入英雄会随天数逐步到位。D3 只实现固定三队编成，不包含派遣和补给结算。"
+	hero_empty_label.text = "已加入英雄会随天数逐步到位。这里会同步显示成长和轻量装备状态。"
+	if equipment_inventory_label != null:
+		equipment_inventory_label.text = "装备库存：%s" % _format_equipment_inventory_summary()
 	for hero_id: String in DataLoader.get_hero_order():
 		_refresh_hero_card(hero_id)
 	for squad_id: String in DataLoader.get_squad_order():
@@ -1051,8 +1111,16 @@ func _refresh_hero_card(hero_id: String) -> void:
 	var name_label: Label = row_info.get("name") as Label
 	var role_label: Label = row_info.get("role") as Label
 	var tags_label: Label = row_info.get("tags") as Label
+	var level_label: Label = row_info.get("level") as Label
+	var exp_label: Label = row_info.get("exp") as Label
+	var exp_bar_label: Label = row_info.get("exp_bar") as Label
+	var equipment_label: Label = row_info.get("equipment") as Label
 	var status_label: Label = row_info.get("status") as Label
-	if card == null or name_label == null or role_label == null or tags_label == null or status_label == null:
+	var unequip_button: Button = row_info.get("unequip") as Button
+	var warm_coat_button: Button = row_info.get("warm_coat") as Button
+	var crossbow_button: Button = row_info.get("crossbow") as Button
+	var toolkit_button: Button = row_info.get("toolkit") as Button
+	if card == null or name_label == null or role_label == null or tags_label == null or level_label == null or exp_label == null or exp_bar_label == null or equipment_label == null or status_label == null or unequip_button == null or warm_coat_button == null or crossbow_button == null or toolkit_button == null:
 		return
 
 	var hero_name: String = str(config.get("name", hero_id))
@@ -1063,17 +1131,31 @@ func _refresh_hero_card(hero_id: String) -> void:
 	var is_available: bool = bool(state.get("is_available", false))
 	var assigned_squad_id: String = str(state.get("assigned_squad_id", ""))
 	var injury_state: String = str(state.get("injury_state", "healthy"))
+	var level: int = int(state.get("level", 1))
+	var current_exp: int = int(state.get("exp", 0))
+	var exp_to_next: int = HeroGrowthManager.get_exp_to_next_level(level)
+	var equipped_item_id: String = str(state.get("equipped_item_id", ""))
+	var squad_status: String = "idle"
+	if not assigned_squad_id.is_empty():
+		squad_status = GameState.get_squad_status(assigned_squad_id)
 
 	name_label.text = hero_name
 	role_label.text = "定位：%s" % role
 	tags_label.text = "专长：%s" % _format_hero_specialties(specialty_tags)
+	level_label.text = "等级：%d 级" % level
+	if exp_to_next > 0:
+		exp_label.text = "经验：%d/%d" % [current_exp, exp_to_next]
+	else:
+		exp_label.text = "经验：已满级"
+	exp_bar_label.text = "进度：%s" % _build_text_progress_bar(current_exp, exp_to_next)
+	equipment_label.text = "装备槽：%s" % _format_equipped_item_name(equipped_item_id)
 
 	var dispatch_text: String = "不可派遣"
 	if is_available:
 		dispatch_text = "可派遣"
 	var squad_text: String = "未编队"
 	if not assigned_squad_id.is_empty():
-		squad_text = "编队：%s" % assigned_squad_id
+		squad_text = "编队：%s" % _get_squad_name(assigned_squad_id)
 
 	if is_unlocked:
 		status_label.text = "状态：已加入，%s，伤病：%s，%s" % [
@@ -1085,6 +1167,12 @@ func _refresh_hero_card(hero_id: String) -> void:
 	else:
 		status_label.text = "状态：第 %d 天加入，未加入，不可派遣" % join_day
 		card.modulate = Color(0.65, 0.65, 0.65, 1.0)
+
+	var can_operate_equipment: bool = is_unlocked and squad_status != "assigned" and squad_status != "returning"
+	unequip_button.disabled = not can_operate_equipment or equipped_item_id.is_empty()
+	warm_coat_button.disabled = not can_operate_equipment or GameState.get_equipment_inventory_amount("warm_coat") <= 0
+	crossbow_button.disabled = not can_operate_equipment or GameState.get_equipment_inventory_amount("hunting_crossbow") <= 0
+	toolkit_button.disabled = not can_operate_equipment or GameState.get_equipment_inventory_amount("toolkit") <= 0
 
 
 # 作用：刷新单个固定小队编成卡片。
@@ -1123,7 +1211,7 @@ func _refresh_squad_card(squad_id: String) -> void:
 		acted_today_text = "已行动"
 	var task_text: String = "无"
 	if not assigned_task_id.is_empty():
-		task_text = assigned_task_id
+		task_text = _format_task_name(assigned_task_id)
 
 	title_label.text = squad_name
 	desc_label.text = description
@@ -1209,7 +1297,7 @@ func _refresh_expedition_card(expedition_id: String) -> void:
 		success_rate_text = "成功率：%d%%" % int(round(success_rate * 100.0))
 
 	title_label.text = title
-	info_label.text = "说明：%s；标签：%s" % [description, _join_values(_to_string_array(required_tags))]
+	info_label.text = "说明：%s；标签：%s" % [description, _format_action_tags(required_tags)]
 	preview_label.text = "%s；预计奖励：%s；可能风险：%s" % [
 		success_rate_text,
 		reward_text,
@@ -1297,6 +1385,37 @@ func _on_clear_squad_pressed(squad_id: String) -> void:
 		_show_action_message("%s 已清空编队" % _get_squad_name(squad_id), true)
 	else:
 		_show_action_message("当前小队已经为空", false)
+	_refresh_hud()
+
+
+# 作用：响应英雄装备按钮，为指定英雄装备一件轻量装备。
+# 参数：hero_id 是英雄 id；equipment_id 是装备 id。
+# 返回：无。成功后刷新英雄区和库存摘要。
+func _on_equip_item_pressed(hero_id: String, equipment_id: String) -> void:
+	var success: bool = HeroGrowthManager.equip_item(hero_id, equipment_id, "shelter_equip_item")
+	if success:
+		_show_action_message("%s 装备了 %s" % [
+			str(DataLoader.get_hero_config(hero_id).get("name", hero_id)),
+			DataLoader.get_equipment_name(equipment_id)
+		], true)
+	else:
+		_show_action_message("当前无法装备 %s" % DataLoader.get_equipment_name(equipment_id), false)
+	_refresh_hud()
+
+
+# 作用：响应英雄卸装按钮。
+# 参数：hero_id 是英雄 id。
+# 返回：无。成功后返还库存并刷新面板。
+func _on_unequip_item_pressed(hero_id: String) -> void:
+	var equipped_item_id: String = GameState.get_hero_equipped_item_id(hero_id)
+	var success: bool = HeroGrowthManager.unequip_item(hero_id, "shelter_unequip_item")
+	if success:
+		_show_action_message("%s 已卸下 %s" % [
+			str(DataLoader.get_hero_config(hero_id).get("name", hero_id)),
+			_format_equipped_item_name(equipped_item_id)
+		], true)
+	else:
+		_show_action_message("当前没有可卸下的装备", false)
 	_refresh_hud()
 
 
@@ -1540,6 +1659,19 @@ func _join_values(values: Array) -> String:
 	return "、".join(parts)
 
 
+# 作用：把任意 Variant 安全转成字符串数组，供标签和战报等 UI 文本拼接复用。
+# 参数：value 是任意值。
+# 返回：字符串数组；不是数组时返回空数组。
+func _to_string_array(value: Variant) -> Array[String]:
+	var result: Array[String] = []
+	if typeof(value) != TYPE_ARRAY:
+		return result
+	var raw_values: Array = value as Array
+	for item_value: Variant in raw_values:
+		result.append(str(item_value))
+	return result
+
+
 # 作用：把英雄专长标签数组转换成中文展示文案。
 # 参数：specialty_tags 是 heroes.json 中的专长标签数组。
 # 返回：中文专长文本；未知标签保留原值。
@@ -1558,6 +1690,45 @@ func _format_hero_injury_state(injury_state: String) -> String:
 	return str(HERO_INJURY_STATE_NAMES.get(injury_state, injury_state))
 
 
+# 作用：把装备库存压缩成一行摘要文本。
+# 参数：无。
+# 返回：中文库存摘要。
+func _format_equipment_inventory_summary() -> String:
+	var parts: Array[String] = []
+	for equipment_id: String in DataLoader.get_equipment_order():
+		parts.append("%s %d 件" % [
+			DataLoader.get_equipment_name(equipment_id),
+			GameState.get_equipment_inventory_amount(equipment_id)
+		])
+	return "、".join(parts)
+
+
+# 作用：把英雄当前装备 id 转成显示文本。
+# 参数：equipment_id 是装备 id。
+# 返回：中文装备名；空字符串时返回“无”。
+func _format_equipped_item_name(equipment_id: String) -> String:
+	if equipment_id.is_empty():
+		return "无"
+	return DataLoader.get_equipment_name(equipment_id)
+
+
+# 作用：生成简易文字经验条。
+# 参数：current 是当前经验；target 是升级需求。
+# 返回：例如 [###--]。
+func _build_text_progress_bar(current: int, target: int) -> String:
+	if target <= 0:
+		return "[#####]"
+	var ratio: float = clamp(float(current) / float(target), 0.0, 1.0)
+	var filled: int = int(round(ratio * 5.0))
+	var parts: Array[String] = []
+	for index: int in range(5):
+		if index < filled:
+			parts.append("#")
+		else:
+			parts.append("-")
+	return "[%s]" % "".join(parts)
+
+
 # 作用：把小队状态值转换成中文展示文案。
 # 参数：status 是小队运行时状态。
 # 返回：中文状态文本；未知值保留原值。
@@ -1571,6 +1742,17 @@ func _format_squad_status(status: String) -> String:
 			return "返程中"
 		_:
 			return status
+
+
+# 作用：把探险标签数组转换成中文展示文案。
+# 参数：required_tags 是探险配置里的标签数组。
+# 返回：中文标签文本；未知标签保留原值。
+func _format_action_tags(required_tags: Array) -> String:
+	var display_values: Array[String] = []
+	for tag_value: Variant in required_tags:
+		var tag: String = str(tag_value)
+		display_values.append(str(HERO_SPECIALTY_NAMES.get(tag, tag)))
+	return _join_values(display_values)
 
 
 # 作用：把小队成员 id 数组转换成英雄中文名文本。
@@ -1604,8 +1786,18 @@ func _get_next_assignable_hero_id_for_squad(squad_id: String) -> String:
 # 参数：squad_id 是小队 id。
 # 返回：小队中文名；缺失时返回 squad_id。
 func _get_squad_name(squad_id: String) -> String:
-	var config: Dictionary = DataLoader.get_squad_config(squad_id)
-	return str(config.get("name", squad_id))
+	return DataLoader.get_squad_name(squad_id)
+
+
+# 作用：把当前小队任务 id 转成玩家可读的中文任务名。
+# 参数：task_id 是运行时记录的任务 id 或占位任务 id。
+# 返回：中文任务名；未知时返回原始 task_id。
+func _format_task_name(task_id: String) -> String:
+	if task_id.is_empty():
+		return "无"
+	if task_id.begins_with("manual_dispatch_"):
+		return "手动出发测试任务"
+	return DataLoader.get_expedition_name(task_id)
 
 
 # 作用：刷新当前目标面板。
