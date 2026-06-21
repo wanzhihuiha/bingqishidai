@@ -1,0 +1,242 @@
+{
+  "schema_version": 1,
+  "items": [
+    {
+      "id": "midgame_day8_expedition_start",
+      "name": "第8天探险起步测试",
+      "description": "直接进入训练场已可用、林澈已加入、资源充足的探险起步局面。",
+      "target_scene": "shelter",
+      "actions": [
+        {
+          "action_type": "start_new_game"
+        },
+        {
+          "action_type": "set_day",
+          "value": 8
+        },
+        {
+          "action_type": "grant_resources",
+          "value": {
+            "wood": 80,
+            "food": 80,
+            "coal": 60,
+            "medicine": 12,
+            "parts": 20
+          }
+        },
+        {
+          "action_type": "ensure_building_level",
+          "target_id": "training_ground",
+          "value": 1
+        },
+        {
+          "action_type": "clear_all_squads"
+        },
+        {
+          "action_type": "assign_heroes_to_squad",
+          "target_id": "pioneer_team",
+          "value": [
+            "lin_che"
+          ]
+        },
+        {
+          "action_type": "set_region_state",
+          "target_id": "a1_broken_pines",
+          "value": {
+            "owner": "player",
+            "danger_level": 1,
+            "is_scouted": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "midgame_day14_hero_growth_test",
+      "name": "第14天英雄成长测试",
+      "description": "直接进入四英雄已加入、训练场已建好、背包有测试装备的中期成长局面。",
+      "target_scene": "shelter",
+      "actions": [
+        {
+          "action_type": "start_new_game"
+        },
+        {
+          "action_type": "set_day",
+          "value": 14
+        },
+        {
+          "action_type": "grant_resources",
+          "value": {
+            "wood": 200,
+            "food": 200,
+            "coal": 200,
+            "medicine": 50,
+            "parts": 200
+          }
+        },
+        {
+          "action_type": "ensure_building_level",
+          "target_id": "training_ground",
+          "value": 1
+        },
+        {
+          "action_type": "ensure_building_level",
+          "target_id": "workshop",
+          "value": 1
+        },
+        {
+          "action_type": "unlock_all_heroes"
+        },
+        {
+          "action_type": "grant_equipment",
+          "value": {
+            "warm_coat": 1,
+            "hunting_crossbow": 1,
+            "toolkit": 1
+          }
+        },
+        {
+          "action_type": "clear_all_squads"
+        },
+        {
+          "action_type": "assign_heroes_to_squad",
+          "target_id": "rescue_team",
+          "value": [
+            "shen_zhixue",
+            "lin_che"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "battle_equipment_compare_test",
+      "name": "装备对战斗影响对比",
+      "description": "直接进入已编好护卫队、区域状态固定、带少量天气压力的战斗对比局面。",
+      "target_scene": "world_map",
+      "actions": [
+        {
+          "action_type": "start_new_game"
+        },
+        {
+          "action_type": "set_day",
+          "value": 14
+        },
+        {
+          "action_type": "grant_resources",
+          "value": {
+            "wood": 150,
+            "food": 150,
+            "coal": 100,
+            "medicine": 30,
+            "parts": 80
+          }
+        },
+        {
+          "action_type": "ensure_building_level",
+          "target_id": "training_ground",
+          "value": 2
+        },
+        {
+          "action_type": "unlock_all_heroes"
+        },
+        {
+          "action_type": "grant_equipment",
+          "value": {
+            "warm_coat": 1,
+            "hunting_crossbow": 1,
+            "toolkit": 1
+          }
+        },
+        {
+          "action_type": "clear_all_squads"
+        },
+        {
+          "action_type": "assign_heroes_to_squad",
+          "target_id": "guard_team",
+          "value": [
+            "a_lan",
+            "lin_che"
+          ]
+        },
+        {
+          "action_type": "set_region_state",
+          "target_id": "b3_cracked_mine",
+          "value": {
+            "owner": "contested",
+            "danger_level": 4,
+            "is_scouted": true
+          }
+        },
+        {
+          "action_type": "set_weather_pressure",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "id": "beacon_repair_test",
+      "name": "信标修复测试",
+      "description": "直接进入已接触边境信标、资源充足、工程与护卫英雄已编队的修复测试局面。",
+      "target_scene": "world_map",
+      "actions": [
+        {
+          "action_type": "start_new_game"
+        },
+        {
+          "action_type": "set_day",
+          "value": 20
+        },
+        {
+          "action_type": "grant_resources",
+          "value": {
+            "wood": 150,
+            "food": 150,
+            "coal": 120,
+            "medicine": 30,
+            "parts": 100
+          }
+        },
+        {
+          "action_type": "ensure_building_level",
+          "target_id": "workshop",
+          "value": 2
+        },
+        {
+          "action_type": "ensure_building_level",
+          "target_id": "training_ground",
+          "value": 1
+        },
+        {
+          "action_type": "unlock_all_heroes"
+        },
+        {
+          "action_type": "clear_all_squads"
+        },
+        {
+          "action_type": "assign_heroes_to_squad",
+          "target_id": "pioneer_team",
+          "value": [
+            "xu_yan",
+            "a_lan"
+          ]
+        },
+        {
+          "action_type": "set_region_state",
+          "target_id": "c4_border_beacon",
+          "value": {
+            "owner": "enemy",
+            "danger_level": 5,
+            "is_scouted": true
+          }
+        },
+        {
+          "action_type": "set_beacon_state",
+          "value": {
+            "is_contacted": true,
+            "intel_count": 2,
+            "repair_progress": 1
+          }
+        }
+      ]
+    }
+  ]
+}
